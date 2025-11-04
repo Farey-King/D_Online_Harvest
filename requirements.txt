@@ -23,7 +23,7 @@ psycopg2-binary==2.9.10
 python-dotenv==1.1.1
 
 # Alternative for managing environment variables in Django settings
-django-environ==0.11.2
+django-environ
 
 
 #  SECURITY & UTILITIES
