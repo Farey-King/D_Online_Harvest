@@ -3,7 +3,7 @@ from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
-from .serializers import SignupSerializer, SigninSerializer
+from .serializers import SignupSerializer, SigninSerializer, SignoutSerializer, RequestPasswordResetSerializer, ConfirmPasswordResetSerializer
 from drf_spectacular.utils import extend_schema
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -59,15 +59,15 @@ class SigninView(APIView):
 
         return Response({
             "message": "Signin successful",
-            "email": user.email,            # ✅ This shows the user email
-            "user_id": user.id,             # optional but useful
+            "email": user.email,            
+            "user_id": user.id,
             "access": str(refresh.access_token),
             "refresh": str(refresh),
         }, status=status.HTTP_200_OK)
 
 # Signout API View
 @extend_schema(
-    request=None,
+    request=SignoutSerializer,
     responses={200: None},
     description="Signout a user by blacklisting their refresh token."
 )
@@ -75,17 +75,43 @@ class SignoutView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def post(self, request):
-        try:
-            refresh_token = request.data["refresh"]
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+        serializer = SignoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = request.data["refresh"]
+        token = RefreshToken(refresh_token)
+        token.blacklist()
 
             #  Update last session logout time
-            last_session = request.user.sessions.last()
-            if last_session:
+        last_session = request.user.sessions.last()
+        if last_session:
                 last_session.logout_time = timezone.now()
                 last_session.save()
 
-            return Response({"message": "Logout successful"}, status=200)
-        except Exception:
-            return Response({"detail": "Invalid refresh token"}, status=400)
+        return Response({"message": "Logout successful"}, status=200)
+    
+@extend_schema(
+    request=RequestPasswordResetSerializer,
+    responses={200: None},
+    description="Request a password reset by sending an OTP to the user's email."
+)
+class RequestPasswordResetView(APIView):
+    def post(self, request):
+        serializer = RequestPasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "OTP sent to your email"})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@extend_schema(
+    request=ConfirmPasswordResetSerializer,
+    responses={200: None},
+    description="Confirm password reset using OTP and set a new password."
+)
+class ConfirmPasswordResetView(APIView):
+    def post(self, request):
+        serializer = ConfirmPasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Password reset successful"})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+               

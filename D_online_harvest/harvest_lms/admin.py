@@ -40,3 +40,5 @@ class SessionLogAdmin(admin.ModelAdmin):
     list_display = ("user", "ip_address", "user_agent", "login_time", "logout_time")
     list_filter = ("login_time", "logout_time")
     search_fields = ("user__email", "ip_address", "user_agent")
+
+

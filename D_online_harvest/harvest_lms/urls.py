@@ -1,12 +1,14 @@
 from django.urls import path
 
-from .views import SigninView, SignoutView, SignupView
+from .views import ConfirmPasswordResetView,RequestPasswordResetView, SigninView, SignoutView, SignupView 
 # from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 urlpatterns = [
     path("signup/", SignupView.as_view(), name="signup"),
     path("signin/", SigninView.as_view(), name="signin"),
     path("signout/", SignoutView.as_view(), name="signout"),
+    path("request-password-reset/", RequestPasswordResetView.as_view(), name="request-password-reset"),
+    path("confirm-password-reset/", ConfirmPasswordResetView.as_view(), name="confirm-password-reset"),
 ]
 
 # urlpatterns += [

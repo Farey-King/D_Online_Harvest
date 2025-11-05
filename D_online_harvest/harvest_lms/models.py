@@ -1,6 +1,8 @@
+from datetime import timedelta
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
-
+from pytz import timezone
+import uuid
 
 class UserManager(BaseUserManager):
     def create_user(self, full_name, email, phone_number, password=None):
@@ -11,6 +13,7 @@ class UserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
         return user
+
 
     def create_superuser(self, full_name, email, phone_number, password=None):
         user = self.create_user(full_name, email, phone_number, password)
@@ -58,6 +61,15 @@ class SessionLog(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.login_time}"
+
+class PasswordResetOTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_valid(self):
+        return timezone.now() <= self.created_at + timedelta(minutes=10)
+    
 
 class Course(models.Model):
     title = models.CharField(max_length=200)
