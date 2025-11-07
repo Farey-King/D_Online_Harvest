@@ -24,11 +24,18 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    ROLE_CHOICES = (
+        ("admin", "Admin"),
+        ("teacher", "Teacher"),
+        ("student", "Student"),
+    )
     full_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
+    email_verified = models.BooleanField(default=True)
     phone_number = models.CharField(max_length=20, unique=True)
     password = models.CharField(max_length=128)
     confirm_password = models.CharField(max_length=128, blank=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="student")
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
@@ -39,7 +46,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
 
     def __str__(self):
-        return self.email
+        return f"{self.email} - {self.role}"
     
 
 
@@ -74,7 +81,25 @@ class PasswordResetOTP(models.Model):
 class Course(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
+    image = models.URLField(blank=True, null=True)
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="courses")
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.title
+    
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
+    country = models.CharField(max_length=255, blank=True, null=True)
+    gender = models.CharField(max_length=10, blank=True, null=True)
+    
+
+    def __str__(self):
+        return f"{self.user.email}'s Profile"
+    
+
+

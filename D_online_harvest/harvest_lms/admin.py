@@ -2,7 +2,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
-from .models import SessionLog, User, Signin, Course
+from .models import Profile, SessionLog, User, Signin, Course
 
 
 
@@ -10,7 +10,7 @@ User = get_user_model()
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ("email", "full_name", "phone_number", "is_staff", "is_active")
+    list_display = ("email", "email_verified","role", "full_name", "phone_number", "is_staff", "is_active")
     list_filter = ("is_staff", "is_superuser", "is_active")
 
     fieldsets = (
@@ -42,3 +42,11 @@ class SessionLogAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "ip_address", "user_agent")
 
 
+admin.site.register(Profile)
+class ProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "image", "gender", "phone", "address", "date_of_birth")
+    search_fields = ("user__email",)
+admin.site.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ("title", "description", "created_at")
+    search_fields = ("title",)

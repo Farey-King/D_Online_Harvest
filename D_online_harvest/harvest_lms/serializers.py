@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import PasswordResetOTP, User, SessionLog
+from .models import PasswordResetOTP, User, SessionLog,Profile
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 import random
@@ -13,7 +13,7 @@ class SignupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["email", "full_name", "phone_number", "password", "confirm_password"]
+        fields = ["email", "full_name", "phone_number", "password", "confirm_password", "role"]
     
     def validate(self, data):
         errors = {}
@@ -96,3 +96,29 @@ class ConfirmPasswordResetSerializer(serializers.Serializer):
         user = User.objects.get(email=self.validated_data["email"])
         user.set_password(self.validated_data["new_password"])
         user.save()
+
+class ProfileSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source="user.full_name", required=False)
+    email = serializers.EmailField(source="user.email", required=False)
+    class Meta:
+        model = Profile
+        fields = "__all__"
+
+def update(self, instance, validated_data):
+        # Extract user data
+        user_data = validated_data.pop("user", {})
+
+        # Update User fields
+        user = instance.user
+        for attr, value in user_data.items():
+            setattr(user, attr, value)
+        user.save()
+
+        # Update Profile fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        return instance
+
+# Logic to get user profile
