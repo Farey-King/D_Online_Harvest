@@ -253,7 +253,9 @@ class UserLookupView(APIView):
         if not user:
             return Response({"message": "No user found"}, status=404)
 
-        profile = ProfileSerializer(user.profile).data
+        #  Ensure profile exists even for old accounts
+        profile, created = Profile.objects.get_or_create(user=user)
+        profile_data = ProfileSerializer(profile).data
 
         signin = Signin.objects.filter(user=user).values("email","login_time")
 
@@ -266,7 +268,7 @@ class UserLookupView(APIView):
                 "is_active": user.is_active,
                 "role": user.role,
             },
-            "profile": profile,
+            "profile": profile_data,
             "signin_logs": list(signin),
             
         })
