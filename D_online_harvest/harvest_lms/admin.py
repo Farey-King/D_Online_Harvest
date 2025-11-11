@@ -2,9 +2,15 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
-from .models import Profile, SessionLog, User, Signin, Course
+from .models import( Lesson, LessonProgress, Profile, Review,
+                    SessionLog,
+                    User,
+                    Signin,
+                    Course,
+                    Task,
+                    Enrollment
 
-
+)
 
 User = get_user_model()
 
@@ -50,3 +56,33 @@ admin.site.register(Course)
 class CourseAdmin(admin.ModelAdmin):
     list_display = ("title", "description", "created_at")
     search_fields = ("title",)
+
+@admin.register(Task)
+class TaskAdmin(admin.ModelAdmin):
+    list_display = ("title", "due_date")
+    search_fields = ("title", "description", "assigned_to__full_name")
+    list_filter = ("title", "due_date")
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("user", "course",  "progress")
+    search_fields = ("user__full_name", "course__title")
+    list_filter = ("user", "course")
+
+@admin.register(LessonProgress)
+class LessonProgressAdmin(admin.ModelAdmin):
+    list_display = ("user", "lesson", "completed")
+    search_fields = ("user__full_name", "lesson__title")
+    list_filter = ("completed","user","lesson")
+
+@admin.register(Lesson)
+class LessonAdmin(admin.ModelAdmin):
+    list_display = ("title", "course", "order")
+    search_fields = ("title", "course__title")
+    list_filter = ("course",)
+
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "rating", "created_at")
+    search_fields = ("user__full_name", "course__title")
+    list_filter = ("course", "rating")

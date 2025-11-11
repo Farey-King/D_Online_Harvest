@@ -1,7 +1,7 @@
 from datetime import timedelta
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
-from pytz import timezone
+from django.utils import timezone
 import uuid
 
 class UserManager(BaseUserManager):
@@ -81,7 +81,10 @@ class PasswordResetOTP(models.Model):
 class Course(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
+    category = models.CharField(max_length=100)
     image = models.URLField(blank=True, null=True)
+    duration_hours = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="courses")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -100,6 +103,63 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.email}'s Profile"
-    
 
 
+class Enrollment(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('in-progress', 'In Progress'),
+        ('completed', 'Completed'),
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in-progress')
+    progress = models.DecimalField(max_digits=4, decimal_places=2, default=0)  # example: 0.35 = 35%
+
+    def __str__(self):
+        return f"{self.user} → {self.course}"
+
+
+class Task(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    subject= models.ForeignKey(Course, on_delete=models.SET_NULL, null=True)
+    title = models.CharField(max_length=255)
+    due_date = models.DateField()
+
+    def __str__(self):
+        return self.title
+
+
+class Lesson(models.Model):
+    course = models.ForeignKey('Course', related_name='lessons', on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    duration = models.CharField(max_length=50)  # e.g. "3 min", "1 hr"
+    video_url = models.URLField(blank=True, null=True)
+    order = models.PositiveIntegerField(default=1)  # Lesson ordering
+    duration_minutes = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.course.title} - {self.title}"
+
+
+class LessonProgress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE)
+    completed = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('user', 'lesson')
+
+
+class Review(models.Model):
+    course = models.ForeignKey('Course', related_name='reviews', on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    rating = models.IntegerField(default=5)  # 1 to 5
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user} review for {self.course}"

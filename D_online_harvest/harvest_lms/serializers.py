@@ -1,6 +1,16 @@
-from rest_framework import serializers
+from rest_framework import serializers  # type: ignore
 from django.contrib.auth import get_user_model
-from .models import PasswordResetOTP, User, SessionLog,Profile
+from .models import (
+    Course,
+    PasswordResetOTP,
+    User,
+    SessionLog,
+    Profile,
+    Enrollment,
+    Task,
+    Lesson,
+
+)
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 import random
@@ -121,4 +131,84 @@ def update(self, instance, validated_data):
 
         return instance
 
-# Logic to get user profile
+# Student Dashboard Serializer
+class StudentDashboardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['full_name', 'email', 'role']
+# Teacher Dashboard Serializer
+class TeacherDashboardSerializer(serializers.ModelSerializer):  
+    class Meta:
+        model = User
+        fields = ['full_name', 'email', 'role']
+# Admin Dashboard Serializer
+class AdminDashboardSerializer(serializers.ModelSerializer):  
+    class Meta:
+        model = User
+        fields = ['full_name', 'email', 'role']
+# Course Serializer
+class CourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+    def create(self, validated_data):
+        course = Course.objects.create(**validated_data)
+        return course
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+class SummarySerializer(serializers.Serializer):
+        total_courses = serializers.IntegerField()
+        completed_courses = serializers.IntegerField()
+        total_hours = serializers.DecimalField(max_digits=6, decimal_places=1)
+
+
+
+class ContinueWatchingSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source='course.title')
+    category = serializers.CharField(source='course.category')
+    thumbnail = serializers.CharField(source='course.thumbnail')
+
+    class Meta:
+        model = Enrollment
+        fields = ['course_title', 'category', 'thumbnail', 'progress']
+
+
+class CoursesListSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source='course.title')
+    category = serializers.CharField(source='course.category')
+
+    class Meta:
+        model = Enrollment
+        fields = ['title', 'category', 'status']
+
+
+class UpcomingTaskSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source='course.title')
+
+    class Meta:
+        model = Task
+        fields = ['title', 'course_title', 'due_date']
+class LessonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lesson
+        fields = ["id", "title", "content", "video_url", "order", "duration_minutes"]
+
+
+class CourseSerializer(serializers.ModelSerializer):
+    lessons = LessonSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Course
+        fields = ["id", "title", "category", "image", "duration_hours", "lessons"]
+
+
+class EnrollmentSerializer(serializers.ModelSerializer):
+    course = CourseSerializer()
+
+    class Meta:
+        model = Enrollment
+        fields = ["id", "status", "progress", "course"]

@@ -15,24 +15,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import include, path
-from drf_spectacular.views import (
-    SpectacularAPIView,
-    SpectacularSwaggerView,
-    SpectacularRedocView,
-)
+from django.urls import include, path, re_path
+from django.views.generic.base import RedirectView
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Temporary redirect to handle accidental double 'api/api' prefix
+    re_path(r'^api/api/(?P<path>.*)$', RedirectView.as_view(url='/api/%(path)s', permanent=False, query_string=True)),
     path('', include('harvest_lms.urls')),
 
-     # OpenAPI Schema
-    path('schema/', SpectacularAPIView.as_view(), name='schema'),
-
-    # Swagger UI
-    path('swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-
-    # ReDoc UI (Optional)
-    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+   
 ]

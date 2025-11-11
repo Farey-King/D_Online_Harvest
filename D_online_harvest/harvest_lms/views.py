@@ -12,25 +12,42 @@ from django.core.mail import send_mail
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status,permissions
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db.models import Q,Sum
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
+
+
 from .serializers import(
+    CourseSerializer,
     SignupSerializer,
     SigninSerializer,
     SignoutSerializer,
     RequestPasswordResetSerializer,
     ConfirmPasswordResetSerializer,
-    ProfileSerializer
+    ProfileSerializer,
+    StudentDashboardSerializer,
+    ContinueWatchingSerializer,
+    CoursesListSerializer,
+    UpcomingTaskSerializer,
+    SummarySerializer,
 )
-from drf_spectacular.utils import extend_schema
-from django.contrib.auth import authenticate
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
 
-from rest_framework.response import Response
-from .models import Profile, SessionLog, Signin, User
-from rest_framework import permissions 
+from .models import( 
+    LessonProgress,
+    Lesson,
+    Profile,
+    SessionLog, 
+    Signin,
+    User,
+    Enrollment,
+    Task,
+    Course
+)
+ 
 
 @extend_schema(
     request=SignupSerializer,
@@ -272,4 +289,154 @@ class UserLookupView(APIView):
             "signin_logs": list(signin),
             
         })
+
+class StudentDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Summary
+        total_courses = Enrollment.objects.filter(user=user).count()
+        completed_courses = Enrollment.objects.filter(user=user, status="completed").count()
+        total_hours = Enrollment.objects.filter(user=user).aggregate(
+            total=Sum('course__duration_hours')
+        )['total'] or 0
+
+        summary_data = {
+            "total_courses": total_courses,
+            "completed_courses": completed_courses,
+            "total_hours": total_hours
+        }
+        summary = SummarySerializer(summary_data).data
+
+        # Continue watching (In-progress courses)
+        continue_watching = Enrollment.objects.filter(user=user, progress__lt=1.0)
+        continue_watching_data = ContinueWatchingSerializer(continue_watching, many=True).data
+
+        # All courses list
+        courses = Enrollment.objects.filter(user=user)
+        courses_data = CoursesListSerializer(courses, many=True).data
+
+        # Upcoming tasks - due in the future
+        tasks = Task.objects.filter(user=user, due_date__gte=timezone.now()).order_by('due_date')[:5]
+        upcoming_tasks = UpcomingTaskSerializer(tasks, many=True).data
+
+        # User section
+        user_info = StudentDashboardSerializer(user).data
+
+        return Response({
+            "user": user_info,
+            "summary": summary,
+            "continue_watching": continue_watching_data,
+            "courses": courses_data,
+            "upcoming_tasks": upcoming_tasks
+        })
+class CompleteLessonView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, lesson_id):
+        user = request.user
+
+        lesson = Lesson.objects.filter(id=lesson_id).first()
+        if not lesson:
+            return Response({"message": "Lesson not found"}, status=404)
+
+        # Ensure user is enrolled in the course
+        enrollment = Enrollment.objects.filter(user=user, course=lesson.course).first()
+        if not enrollment:
+            return Response({"message": "Not enrolled in this course"}, status=403)
+
+        # Mark lesson as completed
+        LessonProgress.objects.update_or_create(
+            user=user,
+            lesson=lesson,
+            defaults={"completed": True}
+        )
+
+        # Calculate progress
+        total_lessons = lesson.course.lessons.count()
+        completed_lessons = LessonProgress.objects.filter(
+            user=user, lesson__course=lesson.course, completed=True
+        ).count()
+
+        progress_percent = (completed_lessons / total_lessons) * 100
+        enrollment.progress = round(progress_percent, 2)
+
+        # Update course status when finished
+        if completed_lessons == total_lessons:
+            enrollment.status = "completed"
+        else:
+            enrollment.status = "in-progress"
+
+        enrollment.save()
+
+        return Response({
+            "message": "Lesson marked as completed",
+            "progress": enrollment.progress,
+            "status": enrollment.status,
+        })
+class CourseListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        courses = Course.objects.all()
+        return Response(CourseSerializer(courses, many=True).data)
+
+class EnrollInCourseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        user = request.user
+
+        course = Course.objects.filter(id=course_id).first()
+        if not course:
+            return Response({"message": "Course not found"}, status=404)
+
+        enrollment, created = Enrollment.objects.get_or_create(user=user, course=course)
+
+        if not created:
+            return Response({"message": "Already enrolled"}, status=400)
+
+        return Response({"message": "Enrollment successful"})
     
+    class CompleteLessonView(APIView):
+        permission_classes = [IsAuthenticated]
+
+    def post(self, request, lesson_id):
+        user = request.user
+
+        lesson = Lesson.objects.filter(id=lesson_id).first()
+        if not lesson:
+            return Response({"message": "Lesson not found"}, status=404)
+
+        enrollment = Enrollment.objects.filter(user=user, course=lesson.course).first()
+        if not enrollment:
+            return Response({"message": "Not enrolled in this course"}, status=403)
+        # mark lesson as completed
+        LessonProgress.objects.update_or_create(
+            user=user, lesson=lesson,
+            defaults={"completed": True, "completed_at": timezone.now()}
+                    )
+
+        # update overall course progress
+        total_lessons = lesson.course.lessons.count()
+        completed_lessons = LessonProgress.objects.filter(
+            user=user, lesson__course=lesson.course, completed=True
+        ).count()
+
+        enrollment.progress = (completed_lessons / total_lessons) * 100
+        enrollment.save()
+
+        return Response({"message": "Lesson completed", "progress": enrollment.progress})
+    
+
+class CourseDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, course_id):
+        course = Course.objects.filter(id=course_id).first()
+        if not course:
+            return Response({"message": "Course not found"}, status=404)
+
+        return Response(CourseSerializer(course).data)
