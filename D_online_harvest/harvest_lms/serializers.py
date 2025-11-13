@@ -1,8 +1,12 @@
 from rest_framework import serializers  # type: ignore
 from django.contrib.auth import get_user_model
 from .models import (
+    Completed,
     Course,
+    Overdue,
     PasswordResetOTP,
+    UpcomingEvent,
+    Assignment,
     User,
     SessionLog,
     Profile,
@@ -212,3 +216,79 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Enrollment
         fields = ["id", "status", "progress", "course"]
+
+class AssignmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Assignment
+        fields = '__all__'
+        read_only_fields = ['user', 'created_at']
+
+
+class UpcomingEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UpcomingEvent
+        fields = '__all__'
+
+
+class OverdueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Overdue
+        fields = '__all__'
+
+
+class CompletedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Completed
+        fields = '__all__'
+
+class CompletedItemSerializer(serializers.ModelSerializer):
+    """Serializer for each completed item (test/assignment)."""
+    class Meta:
+        model = Completed
+        fields = [
+            'id',
+            'title',
+            'description',
+            'event_date',
+            'created_at',
+            'average_score',
+            'average_grades',
+        ]
+
+
+class CompletedDashboardSerializer(serializers.Serializer):
+    """Serializer for top-level dashboard aggregates."""
+    average_score = serializers.DecimalField(max_digits=5, decimal_places=2)
+    test_completed = serializers.IntegerField()
+    average_grade = serializers.CharField()
+    completed_items = serializers.ListField()
+
+
+class OverdueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Overdue
+        fields = [
+            'id',
+            'title',
+            'description',
+            'course',
+            'event_date',
+            'days_overdue',
+            'type',
+            'created_at'
+        ]
+class UpcomingEventSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source='course.title', read_only=True)
+
+    class Meta:
+        model = UpcomingEvent
+        fields = [
+            'id',
+            'title',
+            'description',
+            'course_title',
+            'due_day',
+            'event_date',
+            'duration',
+            'created_at',
+        ]

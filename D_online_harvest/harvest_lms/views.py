@@ -1,4 +1,5 @@
 import email
+from datetime import timedelta
 from drf_spectacular.utils import (
     extend_schema,
     OpenApiParameter,
@@ -12,17 +13,21 @@ from django.core.mail import send_mail
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
-from rest_framework import status,permissions
+from rest_framework import status,permissions,generics
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.db.models import Q,Sum
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Q,Sum,Avg,Count
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 
 
 from .serializers import(
+    AssignmentSerializer,
+    CompletedSerializer,
     CourseSerializer,
+    OverdueSerializer,
     SignupSerializer,
     SigninSerializer,
     SignoutSerializer,
@@ -32,16 +37,21 @@ from .serializers import(
     StudentDashboardSerializer,
     ContinueWatchingSerializer,
     CoursesListSerializer,
+    UpcomingEventSerializer,
     UpcomingTaskSerializer,
     SummarySerializer,
 )
 
 from .models import( 
+    Assignment,
+    Completed,
     LessonProgress,
     Lesson,
+    Overdue,
     Profile,
     SessionLog, 
     Signin,
+    UpcomingEvent,
     User,
     Enrollment,
     Task,
@@ -290,6 +300,10 @@ class UserLookupView(APIView):
             
         })
 
+@extend_schema(
+    tags=["Student Dashboard"],
+    summary="Retrieve the logged-in student's dashboard data"
+)
 class StudentDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -332,6 +346,12 @@ class StudentDashboardView(APIView):
             "courses": courses_data,
             "upcoming_tasks": upcoming_tasks
         })
+    
+@extend_schema(
+    tags=["Lessons"],
+    summary="Mark a lesson as completed",
+    description="Marks a lesson as completed, updates progress percentage, and sets course status to 'in-progress' or 'completed'."
+)
 class CompleteLessonView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -376,13 +396,21 @@ class CompleteLessonView(APIView):
             "progress": enrollment.progress,
             "status": enrollment.status,
         })
+
+@extend_schema(
+    tags=["Courses"],
+    summary="List all available courses"       
+)
 class CourseListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         courses = Course.objects.all()
         return Response(CourseSerializer(courses, many=True).data)
-
+@extend_schema(
+    tags=["Courses"],
+    summary="Enroll in a course"
+)
 class EnrollInCourseView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -430,7 +458,10 @@ class EnrollInCourseView(APIView):
 
         return Response({"message": "Lesson completed", "progress": enrollment.progress})
     
-
+@extend_schema(
+    tags=["Courses"],
+    summary="Retrieve course details"
+)
 class CourseDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -440,3 +471,172 @@ class CourseDetailView(APIView):
             return Response({"message": "Course not found"}, status=404)
 
         return Response(CourseSerializer(course).data)
+
+@extend_schema(
+    tags=["Assignments"],
+    summary="List and create assignments"
+)
+# Assignments
+class AssignmentListCreateView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AssignmentSerializer
+
+    def get_queryset(self):
+        return Assignment.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+@extend_schema(
+    tags=["Assignments"],
+    summary="Retrieve, update, or delete an assignment"
+)
+class AssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AssignmentSerializer
+
+    def get_queryset(self):
+        return Assignment.objects.filter(user=self.request.user)
+
+
+
+@extend_schema(    tags=["Overdue"],
+    summary="List overdue items"
+)
+#  Overdue
+class OverdueListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = OverdueSerializer
+    queryset = Overdue.objects.all().order_by('-created_at')
+
+class CompletedPagination(PageNumberPagination):
+    """Pagination for completed items."""
+    page_size = 5  # You can adjust this (e.g. 10 per page)
+    page_size_query_param = 'page_size'
+    max_page_size = 20
+
+@extend_schema(
+    tags=["Completed"],
+    summary="List completed items",
+    responses={200: CompletedSerializer}
+)
+#  Completed Summary
+class CompletedListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CompletedSerializer
+    queryset = Completed.objects.all().order_by('-created_at')
+    pagination_class = CompletedPagination
+
+@extend_schema(
+    tags=["Completed Dashboard"],
+    summary="Retrieve the logged-in student's completed dashboard data"
+)
+class StudentCompletedDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        completed_qs = Completed.objects.filter(user=user).order_by('-created_at')
+
+        # Compute aggregate stats
+        stats = completed_qs.aggregate(
+            average_score=Avg('average_score'),
+            test_completed=Count('id'),
+            average_grade=Avg('average_grades')
+        )
+
+        # Convert numeric grade to letter grade
+        avg_grade_value = stats['average_grade'] or 0
+        grade_letter = self.get_grade_letter(avg_grade_value)
+
+        # Apply pagination
+        paginator = CompletedPagination()
+        page = paginator.paginate_queryset(completed_qs, request)
+        completed_data = CompletedSerializer(page, many=True).data
+
+        # Final response structure
+        response_data = {
+            "average_score": round(stats['average_score'] or 0, 2),
+            "test_completed": stats['test_completed'] or 0,
+            "average_grade": grade_letter,
+            "completed_items": completed_data,
+        }
+
+        # Add pagination metadata
+        return paginator.get_paginated_response(response_data)
+
+    def get_grade_letter(self, score):
+        """Helper function to convert numeric grade to letter grade."""
+        if score >= 90:
+            return "A"
+        elif score >= 80:
+            return "B+"
+        elif score >= 70:
+            return "B"
+        elif score >= 60:
+            return "C"
+        elif score >= 50:
+            return "D"
+        return "F"
+    
+@extend_schema(
+    tags=["Overdue Dashboard"], 
+    summary="Retrieve the logged-in student's overdue dashboard data"
+)
+class StudentOverdueDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Separate missed assignments and tests
+        missed_assignments = Overdue.objects.filter(user=user, type='assignment').order_by('-days_overdue')
+        missed_tests = Overdue.objects.filter(user=user, type='test').order_by('-days_overdue')
+
+        response_data = {
+            "missed_assignments": OverdueSerializer(missed_assignments, many=True).data,
+            "missed_tests": OverdueSerializer(missed_tests, many=True).data,
+        }
+
+        return Response(response_data)
+
+@extend_schema(
+    tags=["Upcoming Events"],
+    summary="List upcoming events"
+)
+class UpcomingEventListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        today = timezone.now().date()
+        three_days = today + timedelta(days=3)
+        seven_days = today + timedelta(days=7)
+
+        # Get all courses the student is enrolled in
+        enrolled_courses = Enrollment.objects.filter(user=user).values_list('course', flat=True)
+
+        # Student's own events or related to enrolled courses
+        events_qs = UpcomingEvent.objects.filter(
+            Q(user=user) | Q(course__in=enrolled_courses)
+        )
+
+        # Group by due time
+        due_soon_qs = events_qs.filter(
+            due_day__lte=three_days, due_day__gte=today
+        ).order_by('event_date')
+
+        due_next_week_qs = events_qs.filter(
+            due_day__gt=three_days, due_day__lte=seven_days
+        ).order_by('event_date')
+
+        data = {
+            "summary": {
+                "due_soon_count": due_soon_qs.count(),
+                "due_next_week_count": due_next_week_qs.count(),
+            },
+            "due_soon": UpcomingEventSerializer(due_soon_qs, many=True).data,
+            "due_next_week": UpcomingEventSerializer(due_next_week_qs, many=True).data,
+        }
+
+        return Response(data)

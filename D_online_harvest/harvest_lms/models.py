@@ -163,3 +163,57 @@ class Review(models.Model):
 
     def __str__(self):
         return f"{self.user} review for {self.course}"
+
+#Assignment Model
+class Assignment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    course_note = models.TextField(blank=True, null=True)
+    attachment = models.FileField(upload_to='assignments/')
+    due_date = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} by {self.user.email}"
+
+class UpcomingEvent(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='upcoming_events')
+    course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='upcoming_events', null=True, blank=True)
+    due_day = models.DateField()
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    event_date = models.DateTimeField()
+    duration  = models.CharField(max_length=50)  # e.g. "1 hr", "2 hrs"
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+class Overdue(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='overdues')
+    course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='overdues', null=True, blank=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    event_date = models.DateTimeField()
+    days_overdue = models.PositiveIntegerField()
+    type = models.CharField(max_length=50, choices=[('assignment', 'Assignment'), ('test', 'Test')])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.task.title} overdue by {self.days_overdue} days"
+    
+class Completed(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    average_score = models.DecimalField(max_digits=5, decimal_places=2)
+    test_completed = models.PositiveIntegerField()
+    average_grades = models.DecimalField(max_digits=5, decimal_places=2)
+    title = models.CharField(max_length=255)
+    description = models.TextField(max_length=1000)
+    event_date = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} - {self.user.full_name}"
+    

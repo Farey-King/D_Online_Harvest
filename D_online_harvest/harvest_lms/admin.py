@@ -2,8 +2,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
-from .models import( Lesson, LessonProgress, Profile, Review,
-                    SessionLog,
+from .models import( Completed,
+                     Lesson, LessonProgress, Overdue, Profile, Review,
+                    SessionLog, UpcomingEvent, Assignment,
                     User,
                     Signin,
                     Course,
@@ -86,3 +87,32 @@ class ReviewAdmin(admin.ModelAdmin):
     list_display = ("user", "course", "rating", "created_at")
     search_fields = ("user__full_name", "course__title")
     list_filter = ("course", "rating")
+
+@admin.register(Assignment)
+class AssignmentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'user', 'course', 'due_date', 'created_at')
+    search_fields = ('title', 'user__email')
+    list_filter = ('course', 'due_date')
+
+
+
+@admin.register(UpcomingEvent)
+class UpcomingEventAdmin(admin.ModelAdmin):
+    list_display = ('title', 'user', 'course', 'due_day', 'event_date', 'duration', 'created_at')
+    list_filter = ('course', 'due_day', 'user')
+    search_fields = ('title', 'description', 'course__title', 'user__username', 'user__email')
+    ordering = ('-event_date',)
+
+
+@admin.register(Completed)
+class CompletedAdmin(admin.ModelAdmin):
+    list_display = ('title',"user", 'average_score', 'test_completed', 'average_grades', 'event_date')
+    search_fields = ('title',)
+    list_filter = ('event_date',)
+
+@admin.register(Overdue)
+class OverdueAdmin(admin.ModelAdmin):
+    list_display = ('title', 'user', 'course', 'type', 'days_overdue', 'event_date', 'created_at')
+    list_filter = ('type', 'course', 'days_overdue')
+    search_fields = ('title', 'description', 'course', 'user__username', 'user__email')
+    ordering = ('-created_at',)
