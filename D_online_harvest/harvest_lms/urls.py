@@ -2,10 +2,10 @@ from django.urls import include, path,re_path
 
 
 
-from  harvest_lms.views import (CompleteLessonView, CompletedListView, ConfirmPasswordResetView,
+from  harvest_lms.views import (CompleteLessonView, CompletedListView, ConfirmPasswordResetView, InstructorCourseCreateView, InstructorCourseDeleteView, InstructorCourseDetailView, InstructorCourseEditView, InstructorCoursePerformanceView, InstructorCoursesListView, InstructorDashboardCardsView, InstructorEarningsView, MarkNotificationAsReadView, NotificationListView,
                     RequestPasswordResetView, 
                     SigninView, SignoutView, 
-                    SignupView,ProfileUpdateView, 
+                    SignupView,ProfileUpdateView, UpcomingTasksView, 
                     UserLookupView,
                     StudentDashboardView,
                     CourseListView,
@@ -64,6 +64,19 @@ urlpatterns = [
     #  Completed
     # path("api/student/completed/", CompletedListView.as_view(), name="completed-list"),
     path('student/completed/dashboard/', StudentCompletedDashboardView.as_view(), name='student-completed-dashboard'),
+    # Instructor Dashboard Cards
+    path('instructor/dashboard-cards/', InstructorDashboardCardsView.as_view(), name='instructor-dashboard-cards'),
+    # Instructor Course Performance
+    path('instructor/course-performance/', InstructorCoursePerformanceView.as_view(), name='instructor-course-performance'),
+    path("instructor/upcoming-tasks/", UpcomingTasksView.as_view(), name="upcoming-tasks"),
+    path("instructor/notifications/", NotificationListView.as_view(), name="notifications"),
+    path("instructor/notification/<int:pk>/read/", MarkNotificationAsReadView.as_view(), name="mark-notification-read"),
+    path("instructor/earnings-summary/", InstructorEarningsView.as_view(), name="instructor-earnings-summary"),
+    path("instructor/courses/create/", InstructorCourseCreateView.as_view(), name="course-create"),
+    path("instructor/courses/", InstructorCoursesListView.as_view(), name="instructor-courses"),
+    path("instructor/course/<int:pk>/", InstructorCourseDetailView.as_view(), name="course-detail"),
+    path("instructor/course/<int:pk>/edit/", InstructorCourseEditView.as_view(), name="course-edit"),
+    path("instructor/course/<int:pk>/delete/", InstructorCourseDeleteView.as_view(), name="course-delete"),
     
 ]
 

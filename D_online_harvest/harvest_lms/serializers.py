@@ -3,10 +3,12 @@ from django.contrib.auth import get_user_model
 from .models import (
     Completed,
     Course,
+    Notification,
     Overdue,
     PasswordResetOTP,
     UpcomingEvent,
     Assignment,
+    UpcomingTask,
     User,
     SessionLog,
     Profile,
@@ -207,7 +209,7 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ["id", "title", "category", "image", "duration_hours", "lessons"]
+        fields = ["id", "title", "category", "image", "video", "duration_hours", "lessons"]
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
@@ -292,3 +294,67 @@ class UpcomingEventSerializer(serializers.ModelSerializer):
             'duration',
             'created_at',
         ]
+# for instructor cards dashboard
+class InstuctorCardDashboardSerializer(serializers.ModelSerializer):
+    label = serializers.CharField()
+    value = serializers.FloatField()
+    percentage_change = serializers.FloatField()
+    
+# Course Performance Serializer
+class CoursePerformanceSerializer(serializers.Serializer):
+    course_title = serializers.CharField()
+    enrollment = serializers.IntegerField()
+    revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    refund = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+# Upcoming Task Serializer
+class UpcomingTaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UpcomingTask
+        fields = ['id', 'title', 'description', 'task_type', 'due_date', 'is_completed']
+        
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'title', 'message', 'notification_type', 'is_read', 'created_at']
+
+class InstructorEarningsSerializer(serializers.ModelSerializer):
+    earnings = serializers.SerializerMethodField()
+    views = serializers.SerializerMethodField()
+    saved = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'image', 'video', 'price', 'earnings', 'views', 'saved']
+
+    def get_earnings(self, obj):
+        # Calculate total earnings from enrollments
+        return sum(enrollment.price for enrollment in obj.enrollments.all())
+
+    def get_views(self, obj):
+        return obj.views.count()
+
+    def get_saved(self, obj):
+        return obj.saves.count()
+
+
+class InstructorCourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields ="__all__"
+
+
+class InstructorCourseCardSerializer(serializers.ModelSerializer):
+    rating = serializers.SerializerMethodField()
+    students_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Course
+        fields = "__all__"
+
+    def get_rating(self, obj):
+        # until reviews are implemented
+        return 4.9
+
+    def get_students_count(self, obj):
+        return obj.enrollments.count()

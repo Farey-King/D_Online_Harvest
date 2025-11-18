@@ -8,6 +8,7 @@ from drf_spectacular.utils import (
 
 from django.conf import settings
 from django.utils import timezone
+from django.utils.timezone import now
 from django.shortcuts import render
 from django.core.mail import send_mail
 from django.utils.decorators import method_decorator
@@ -17,6 +18,7 @@ from rest_framework import status,permissions,generics
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
 from django.db.models import Q,Sum,Avg,Count
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -26,7 +28,12 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import(
     AssignmentSerializer,
     CompletedSerializer,
+    CoursePerformanceSerializer,
     CourseSerializer,
+    InstructorEarningsSerializer,
+    InstructorCourseSerializer,
+    InstructorCourseCardSerializer,
+    NotificationSerializer,
     OverdueSerializer,
     SignupSerializer,
     SigninSerializer,
@@ -47,16 +54,23 @@ from .models import(
     Completed,
     LessonProgress,
     Lesson,
+    Notification,
     Overdue,
     Profile,
+    Refund,
     SessionLog, 
     Signin,
     UpcomingEvent,
+    UpcomingTask,
     User,
     Enrollment,
     Task,
-    Course
+    Course,
+    InstructorEarning,
+    Revenue
+    
 )
+from harvest_lms import models
  
 
 @extend_schema(
@@ -640,3 +654,251 @@ class UpcomingEventListView(APIView):
         }
 
         return Response(data)
+    
+# Teacher Dashboard Cards
+@extend_schema(
+    tags=["Instructor Dashboard"],
+    summary="Retrieve the logged-in instructor's dashboard card metrics"
+)
+class InstructorDashboardCardsView(APIView):
+    """
+    Returns the dashboard card metrics:
+    - Total Earnings
+    - Active Courses
+    - Total Students
+    Each with percentage growth from previous month.
+    """
+
+    def get_percentage_change(self, current, previous):
+        if previous == 0:
+            return 0.0
+        return round(((current - previous) / previous) * 100, 2)
+
+    def get(self, request):
+        user = request.user
+
+        today = now()
+        this_month = today.replace(day=1)
+        last_month_last_day = this_month - timedelta(days=1)
+        last_month = last_month_last_day.replace(day=1)
+
+        
+        # TOTAL EARNINGS
+        
+        current_earnings = InstructorEarning.objects.filter(
+            instructor=user,
+            created_at__gte=this_month
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        previous_earnings = InstructorEarning.objects.filter(
+            instructor=user,
+            created_at__range=[last_month, last_month_last_day]
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        earnings_change = self.get_percentage_change(current_earnings, previous_earnings)
+
+        
+        #  ACTIVE COURSES
+        
+        current_courses = Course.objects.filter(author=user).count()
+
+        previous_courses = Course.objects.filter(
+            author=user,
+            created_at__range=[last_month, last_month_last_day]
+        ).count()
+
+        courses_change = self.get_percentage_change(current_courses, previous_courses)
+
+        
+        #  TOTAL STUDENTS
+        
+        current_students = Enrollment.objects.filter(course__author=user).count()
+
+        previous_students = Enrollment.objects.filter(course__author=user,enrolled_at__range=[last_month, last_month_last_day]).count()
+
+        students_change = self.get_percentage_change(current_students, previous_students)
+
+        # Final response
+        response = {
+            "cards": [
+                {
+                    "label": "Total Earnings",
+                    "value": current_earnings,
+                    "percentage_change": earnings_change
+                },
+                {
+                    "label": "Active Courses",
+                    "value": current_courses,
+                    "percentage_change": courses_change
+                },
+                {
+                    "label": "Total Students",
+                    "value": current_students,
+                    "percentage_change": students_change
+                }
+            ]
+        }
+
+        return Response(response)
+# Course performance view graphs and stats
+@extend_schema(
+    tags=["Instructor Dashboard"],
+    summary="Retrieve course performance metrics for the logged-in instructor"
+)
+class InstructorCoursePerformanceView(APIView):
+    permission_classes = [IsAuthenticated]
+    """
+    Returns course performance metrics:
+    - Enrollment Trends
+    - Refunds
+    - Revenue Generated
+    Over selectable chart
+
+    """
+    def get(self, request):
+        user = request.user
+
+        # Only instructor should access
+        if user.role != "instructor":
+            return Response({"detail": "Unauthorized"}, status=403)
+
+        instructor_courses = Course.objects.filter(author=user)
+
+        performance_data = []
+
+        for course in instructor_courses:
+
+            # COUNT ENROLLMENTS
+            enrollment_count = Enrollment.objects.filter(course=course).count()
+
+            # SUM REVENUE
+            total_revenue = (
+                Revenue.objects.filter(course=course)
+                .aggregate(total=models.Sum("amount"))["total"] or 0
+            )
+
+            # SUM REFUND
+            total_refunds = (
+                Refund.objects.filter(course=course)
+                .aggregate(total=models.Sum("amount"))["total"] or 0
+            )
+
+            performance_data.append({
+                "course_title": course.title,
+                "enrollment": enrollment_count,
+                "revenue": total_revenue,
+                "refund": total_refunds,
+            })
+
+        serializer = CoursePerformanceSerializer(performance_data, many=True)
+        return Response(serializer.data)
+@extend_schema(
+    tags=["Instructor Tasks"],
+)
+class UpcomingTasksView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        tasks = UpcomingTask.objects.filter(
+            user=user,
+            is_completed=False,
+            due_date__gte=timezone.now()
+        ).order_by("due_date")
+
+        serializer = UpcomingTaskSerializer(tasks, many=True)
+        return Response(serializer.data)
+@extend_schema(
+    tags=["Instructor Notifications"],
+)
+class NotificationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        notifications = Notification.objects.filter(user=user).order_by('-created_at')
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data)
+@extend_schema(
+    tags=["Instructor Notifications"],
+)
+# Mark notification as read
+class MarkNotificationAsReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            notification = Notification.objects.get(pk=pk, user=request.user)
+        except Notification.DoesNotExist:
+            return Response({"detail": "Not found"}, status=404)
+
+        notification.is_read = True
+        notification.save()
+
+        return Response({"detail": "Notification marked as read"})
+
+@extend_schema(
+    tags=["Instructor Earnings"],
+)
+class InstructorEarningsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        courses = Course.objects.filter(author=request.user)
+        serializer = InstructorEarningsSerializer(courses, many=True)
+        return Response(serializer.data)
+
+@extend_schema(
+    tags=["Instructor Courses"],
+)
+# CREATE Course
+class InstructorCourseCreateView(CreateAPIView):
+    serializer_class = InstructorCourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
+@extend_schema(
+    tags=["Instructor Courses"],
+)
+# LIST Courses (Instructor Dashboard Grid)
+class InstructorCoursesListView(ListAPIView):
+    serializer_class = InstructorCourseCardSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Course.objects.filter(author=self.request.user)
+
+@extend_schema(
+    tags=["Instructor Courses"],
+)
+# VIEW Course Details
+class InstructorCourseDetailView(RetrieveAPIView):
+    serializer_class = InstructorCourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Course.objects.filter(author=self.request.user)
+
+@extend_schema(
+    tags=["Instructor Courses"],
+)
+# EDIT Course
+class InstructorCourseEditView(UpdateAPIView):
+    serializer_class = InstructorCourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Course.objects.filter(author=self.request.user)
+
+@extend_schema(
+    tags=["Instructor Courses"],
+)
+# DELETE Course
+class InstructorCourseDeleteView(DestroyAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Course.objects.filter(author=self.request.user) 

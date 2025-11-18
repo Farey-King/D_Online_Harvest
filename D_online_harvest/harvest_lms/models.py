@@ -26,7 +26,7 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = (
         ("admin", "Admin"),
-        ("teacher", "Teacher"),
+        ("instructor", "Instructor"),
         ("student", "Student"),
     )
     full_name = models.CharField(max_length=100)
@@ -86,6 +86,7 @@ class Course(models.Model):
     duration_hours = models.DecimalField(max_digits=5, decimal_places=1, default=0)
     price = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="courses")
+    video = models.URLField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -111,9 +112,23 @@ class Enrollment(models.Model):
         ('in-progress', 'In Progress'),
         ('completed', 'Completed'),
     )
+    CATEGORY_CHOICES = (
+        ('front-end', 'Front-End Development'),
+        ('back-end', 'Back-End Development'),
+        ('full-stack', 'Full-Stack Development'),
+        ('data-science', 'Data Science'),
+        ('machine-learning', 'Machine Learning'),
+        ('mobile-development', 'Mobile Development'),
+        ('devops', 'DevOps'),
+        ('cybersecurity', 'Cybersecurity'),
+        ('cloud-computing', 'Cloud Computing'),
+        ('other', 'Other'),
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    course = models.CharField(max_length=255)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='front-end')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in-progress')
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     progress = models.DecimalField(max_digits=4, decimal_places=2, default=0)  # example: 0.35 = 35%
 
     def __str__(self):
@@ -216,4 +231,77 @@ class Completed(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.user.full_name}"
+
+class InstructorEarning(models.Model):
+    instructor = models.ForeignKey(User, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    def __str__(self):
+        return f"{self.instructor.email} - {self.amount}"
     
+class Revenue(models.Model):
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_id = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Payment {self.transaction_id} - {self.amount}"
+
+
+class Refund(models.Model):
+    payment = models.OneToOneField(Revenue, on_delete=models.CASCADE, related_name='refund')
+    course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='refunds')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=255, blank=True, null=True)
+    refunded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Refund for {self.payment.transaction_id}"
+
+class UpcomingTask(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="upcoming_tasks")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    due_date = models.DateTimeField()
+    task_type = models.CharField(max_length=50, choices=[
+        ('assignment', 'Assignment'),
+        ('grading', 'Grading'),
+        ('event', 'Event'),
+        ('course', 'Course'),
+    ])
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.full_name} - {self.title}"
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    notification_type = models.CharField(max_length=50, choices=[
+        ('enrollment', 'Enrollment'),
+        ('message', 'Message'),
+        ('refund', 'Refund'),
+        ('submission', 'Submission'),
+        ('system', 'System'),
+    ])
+
+    def __str__(self):
+        return f"{self.user.full_name} - {self.title}"
+
+class CourseView(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="views")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+class CourseSaved(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="saves")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    saved_at = models.DateTimeField(auto_now_add=True)

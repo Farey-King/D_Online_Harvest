@@ -3,15 +3,27 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
 from .models import( Completed,
-                     Lesson, LessonProgress, Overdue, Profile, Review,
+                     Lesson, LessonProgress, Overdue, Profile, Revenue, Review,Refund,
                     SessionLog, UpcomingEvent, Assignment,
                     User,
                     Signin,
                     Course,
                     Task,
-                    Enrollment
+                    Enrollment,
+                    CourseView,
+                    CourseSaved
+                    
 
 )
+
+
+admin.site.register(CourseSaved)
+admin.site.register(CourseView)
+
+
+admin.site.register(Revenue)
+admin.site.register(Refund)
+
 
 User = get_user_model()
 
@@ -116,3 +128,5 @@ class OverdueAdmin(admin.ModelAdmin):
     list_filter = ('type', 'course', 'days_overdue')
     search_fields = ('title', 'description', 'course', 'user__username', 'user__email')
     ordering = ('-created_at',)
+
+
