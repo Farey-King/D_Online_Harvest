@@ -305,3 +305,144 @@ class CourseSaved(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="saves")
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     saved_at = models.DateTimeField(auto_now_add=True)
+
+class Conversation(models.Model):
+    instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="instructor_conversations")
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name="student_conversations")
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_blocked = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('instructor', 'student')
+
+    def __str__(self):
+        return f"{self.instructor.username} ↔ {self.student.username}"
+
+class Message(models.Model):
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    is_read = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Message from {self.sender.username} at {self.timestamp}"
+    
+class BasicInformation(models.Model):
+    CATEGOTY_CHOICES = (
+        ('front-end', 'Front-End Development'),
+        ('back-end', 'Back-End Development'),
+        ('full-stack', 'Full-Stack Development'),
+        ('data-science', 'Data Science'),
+        ('machine-learning', 'Machine Learning'),
+        ('mobile-development', 'Mobile Development'),
+        ('devops', 'DevOps'),
+        ('cybersecurity', 'Cybersecurity'),
+        ('cloud-computing', 'Cloud Computing'),
+        ('other', 'Other'),
+    )
+    COURSE_CHOICES = (
+        ('web-development', 'Web Development'),
+        ('data-science', 'Data Science'),
+        ('mobile-development', 'Mobile Development'),
+        ('cloud-computing', 'Cloud Computing'),
+        ('cybersecurity', 'Cybersecurity'),
+        ('devops', 'DevOps'),
+        ('machine-learning', 'Machine Learning'),
+        ('other', 'Other'),
+    )
+    COURSE_LANGUAGE_CHOICES = (
+        ('python', 'Python'),
+        ('javascript', 'JavaScript'),
+        ('typescript', 'TypeScript'),
+        ('rust', 'Rust'),
+        ('sql', 'SQL'),
+        ('flutter', 'Flutter'),
+        ('other', 'Other'),
+    )
+    SUBTITLE_LANGUAGE = (
+        ('english', 'English'),
+        ('french', 'French'),
+        ('german', 'German'),
+        ('spanish', 'Spanish'),
+        ('chinese', 'Chinese'),
+        ('japanese', 'Japanese'),
+        ('other', 'Other'),
+    )
+    COURSE_LEVEL_CHOICES = (
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'),
+        ('advanced', 'Advanced'),
+    )
+    DURATION_CHOICES = (
+        ('short', 'Short (< 2 hours)'),
+        ('medium', 'Medium (2-10 hours)'),
+        ('long', 'Long (> 10 hours)'),
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="instructor")
+    title = models.CharField(max_length=255)
+    subtitle = models.CharField(max_length=255)
+    category = models.CharField(max_length=50, choices=CATEGOTY_CHOICES, default='front-end')
+    course_sub_category = models.CharField(max_length=50, choices=COURSE_CHOICES, default='web-development')
+    course_topics = models.TextField()
+    course_language = models.CharField(max_length=50, choices=COURSE_LANGUAGE_CHOICES, default='python')
+    subtitle_language = models.CharField(max_length=50, choices=SUBTITLE_LANGUAGE, default='english')
+    course_level = models.CharField(max_length=50, choices=COURSE_LEVEL_CHOICES, default='beginner')
+    duration = models.CharField(max_length=50, choices=DURATION_CHOICES, default='short')
+
+class AdvancedInformation(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="instructor_advanced")
+    course_thumbnail = models.ImageField(upload_to='course_thumbnails/', blank=True, null=True)
+    course_trailer = models.FileField(upload_to='course_trailers/', blank=True, null=True)
+    course_description = models.TextField()
+    topics_covered = models.CharField(max_length=255)
+    target_audience = models.CharField(max_length=255)
+    course_requirements = models.CharField(max_length=255)
+
+class CourseCurriculum(models.Model):
+   CONTENT_TYPE_CHOICES = (
+       ('video', 'Video'), 
+       ('attach file', 'Attach File'), 
+       ('captions', 'Captions'), 
+       ('description', 'Description'),
+       ('lecture notes', 'Lecture Notes'),
+   )
+   user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="instructor_curriculum")
+   section_name = models.CharField(max_length=255)
+   lecture_name = models.CharField(max_length=255,choices=CONTENT_TYPE_CHOICES, default='video')
+   
+class PublishCourse(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="instructor_publish")
+    welcome_message = models.TextField()
+    congratulations_message = models.TextField()
+    published_at = models.DateTimeField(null=True, blank=True)
+
+class TransactionHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transactions")
+    date = models.DateTimeField(auto_now_add=True)
+    course_name = models.CharField(max_length=255)
+    student = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_id = models.CharField(max_length=255)
+    status = models.CharField(max_length=50, choices=[
+        ('completed', 'Completed'),
+        ('pending', 'Pending'),
+        ('failed', 'Failed'),
+    ])
+
+
+    def __str__(self):
+        return f"{self.user.email} - {self.course_name} - {self.amount}"
+    
+class PurchaseHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="purchase_history")
+    image = models.URLField(blank=True, null=True)
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    author = models.CharField(max_length=200)
+    purchase_date = models.DateTimeField(auto_now_add=True)
+    
+
+    def __str__(self):
+        return f"{self.user.email} purchased {self.title} on {self.purchase_date}"

@@ -1,9 +1,18 @@
 
+from email.message import Message
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
-from .models import( Completed,
-                     Lesson, LessonProgress, Overdue, Profile, Revenue, Review,Refund,
+from .models import( AdvancedInformation,
+                    Completed,
+                    Conversation,
+                    Lesson, 
+                    LessonProgress, 
+                    Overdue, 
+                    Profile, 
+                    Revenue, 
+                    Review,
+                    Refund,
                     SessionLog, UpcomingEvent, Assignment,
                     User,
                     Signin,
@@ -11,12 +20,19 @@ from .models import( Completed,
                     Task,
                     Enrollment,
                     CourseView,
-                    CourseSaved
+                    CourseSaved,
+                    Message,
+                    BasicInformation,
+                    CourseCurriculum,
+                    PublishCourse
                     
 
 )
 
-
+admin.site.register(AdvancedInformation)
+admin.site.register(BasicInformation)
+admin.site.register(CourseCurriculum)
+admin.site.register(PublishCourse)
 admin.site.register(CourseSaved)
 admin.site.register(CourseView)
 
@@ -129,4 +145,28 @@ class OverdueAdmin(admin.ModelAdmin):
     search_fields = ('title', 'description', 'course', 'user__username', 'user__email')
     ordering = ('-created_at',)
 
+class MessageInline(admin.TabularInline):
+    model = Message
+    extra = 0
+    readonly_fields = ('sender', 'content', 'is_read', 'timestamp')
+    can_delete = False
 
+
+@admin.register(Conversation)
+class ConversationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'instructor', 'student', 'created_at', 'is_blocked')
+    list_filter = ('is_blocked', 'created_at')
+    search_fields = ('instructor__username', 'student__username')
+    inlines = [MessageInline]
+
+
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'conversation', 'sender', 'short_content', 'is_read', 'timestamp')
+    list_filter = ('is_read', 'timestamp', 'sender')
+    search_fields = ('sender__username', 'content')
+    readonly_fields = ('timestamp',)
+
+    def short_content(self, obj):
+        return obj.content[:40] + ("..." if len(obj.content) > 40 else "")
+    short_content.short_description = "Content"

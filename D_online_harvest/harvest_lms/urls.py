@@ -2,10 +2,23 @@ from django.urls import include, path,re_path
 
 
 
-from  harvest_lms.views import (CompleteLessonView, CompletedListView, ConfirmPasswordResetView, InstructorCourseCreateView, InstructorCourseDeleteView, InstructorCourseDetailView, InstructorCourseEditView, InstructorCoursePerformanceView, InstructorCoursesListView, InstructorDashboardCardsView, InstructorEarningsView, MarkNotificationAsReadView, NotificationListView,
+from  harvest_lms.views import (AdvancedInformationView,
+                                CompleteLessonView, 
+                                CompletedListView,
+                                ConfirmPasswordResetView, CourseCurriculumDeleteView, CourseCurriculumUpdateView,
+                                InstructorCourseCreateView,
+                                InstructorCourseDeleteView,
+                                InstructorCourseDetailView,
+                                InstructorCourseEditView,
+                                InstructorCoursePerformanceView,
+                                InstructorCoursesListView,
+                                InstructorDashboardCardsView,
+                                InstructorEarningsView, 
+                                MarkNotificationAsReadView, 
+                                NotificationListView, PurchaseHistoryView,
                     RequestPasswordResetView, 
                     SigninView, SignoutView, 
-                    SignupView,ProfileUpdateView, UpcomingTasksView, 
+                    SignupView,ProfileUpdateView, TransactionHistoryView, UpcomingTasksView, 
                     UserLookupView,
                     StudentDashboardView,
                     CourseListView,
@@ -18,6 +31,16 @@ from  harvest_lms.views import (CompleteLessonView, CompletedListView, ConfirmPa
                     # CompletedListView,
                     StudentCompletedDashboardView,
                     StudentOverdueDashboardView,
+                    ConversationListView,
+                    ConversationDetailView,
+                    SendMessageView,
+                    StartConversationView,
+                    DeleteConversationView,
+                    BlockConversationView,
+                    BasicInformationView,
+                    CourseCurriculumView,
+                    PublishCourseView,
+                    EarningsDashboardView,
                     )
 try:
     from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
@@ -66,6 +89,8 @@ urlpatterns = [
     path('student/completed/dashboard/', StudentCompletedDashboardView.as_view(), name='student-completed-dashboard'),
     # Instructor Dashboard Cards
     path('instructor/dashboard-cards/', InstructorDashboardCardsView.as_view(), name='instructor-dashboard-cards'),
+
+    path("purchase-history/", PurchaseHistoryView.as_view(), name="purchase-history"),
     # Instructor Course Performance
     path('instructor/course-performance/', InstructorCoursePerformanceView.as_view(), name='instructor-course-performance'),
     path("instructor/upcoming-tasks/", UpcomingTasksView.as_view(), name="upcoming-tasks"),
@@ -77,6 +102,21 @@ urlpatterns = [
     path("instructor/course/<int:pk>/", InstructorCourseDetailView.as_view(), name="course-detail"),
     path("instructor/course/<int:pk>/edit/", InstructorCourseEditView.as_view(), name="course-edit"),
     path("instructor/course/<int:pk>/delete/", InstructorCourseDeleteView.as_view(), name="course-delete"),
+    # Conversations and Messaging
+    path("messages/", ConversationListView.as_view(), name="message-list"),
+    path("messages/start/", StartConversationView.as_view(), name="message-start"),
+    path("messages/<int:convo_id>/", ConversationDetailView.as_view(), name="message-detail"),
+    path("messages/<int:convo_id>/send/", SendMessageView.as_view(), name="message-send"),
+    path("messages/<int:convo_id>/delete/", DeleteConversationView.as_view(), name="message-delete"),
+    path("messages/<int:convo_id>/block/", BlockConversationView.as_view(), name="message-block"),
+    path("basic-information/", BasicInformationView.as_view(), name="basic-information"),
+    path("advanced-information/", AdvancedInformationView.as_view(), name="advanced-information"),
+    path("course-curriculum/", CourseCurriculumView.as_view(), name="course-curriculum"),
+    path("curriculum/<int:pk>/update/", CourseCurriculumUpdateView.as_view(), name="curriculum-update"),
+    path("curriculum/<int:pk>/delete/", CourseCurriculumDeleteView.as_view(), name="curriculum-delete"),
+    path("earnings/", EarningsDashboardView.as_view(), name="instructor-earnings"),
+    path("publish-course/", PublishCourseView.as_view(), name="publish-course"),
+    path("transaction-history/", TransactionHistoryView.as_view(), name="transaction-history"),
     
 ]
 

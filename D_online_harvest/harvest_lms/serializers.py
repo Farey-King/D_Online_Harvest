@@ -1,7 +1,10 @@
+from tkinter import Message
 from rest_framework import serializers  # type: ignore
 from django.contrib.auth import get_user_model
 from .models import (
+    AdvancedInformation,
     Completed,
+    Conversation,
     Course,
     Notification,
     Overdue,
@@ -15,6 +18,12 @@ from .models import (
     Enrollment,
     Task,
     Lesson,
+    Message,
+    BasicInformation,
+    CourseCurriculum,
+    PublishCourse,
+    TransactionHistory,
+    PurchaseHistory
 
 )
 from django.core.validators import validate_email
@@ -358,3 +367,85 @@ class InstructorCourseCardSerializer(serializers.ModelSerializer):
 
     def get_students_count(self, obj):
         return obj.enrollments.count()
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source="sender.username", read_only=True)
+
+    class Meta:
+        model = Message
+        fields = ["id", "sender", "sender_name", "content", "is_read", "timestamp"]
+
+
+class ConversationListSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.username", read_only=True)
+    last_message = serializers.SerializerMethodField()
+    unread_messages = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conversation
+        fields = ["id", "student_name", "last_message", "unread_messages"]
+
+    def get_last_message(self, obj):
+        last = obj.messages.last()
+        return last.content if last else None
+
+    def get_unread_messages(self, obj):
+        return obj.messages.filter(is_read=False).count()
+
+
+class ConversationDetailSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.username", read_only=True)
+    messages = MessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Conversation
+        fields = ["id", "student_name", "messages"]
+
+class StartConversationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Conversation
+        fields = ['student', 'instructor']
+
+class BasicInformationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BasicInformation
+        fields = '__all__'
+
+class AdvancedInformationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdvancedInformation
+        fields = '__all__'
+
+class CourseCurriculumSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CourseCurriculum
+        fields = '__all__'
+
+class PublishCourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PublishCourse
+        fields = '__all__'
+
+class TransactionHistorySerializer(serializers.Serializer):
+    class Meta:
+        model = TransactionHistory
+        fields = '__all__'
+    date = serializers.DateTimeField()
+    course_name = serializers.CharField()
+    total_students = serializers.IntegerField()
+    total_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    status = serializers.CharField()
+
+class EarningsDashboardSerializer(serializers.Serializer):
+    total_earning = serializers.DecimalField(max_digits=10, decimal_places=2)
+    current_balance = serializers.DecimalField(max_digits=10, decimal_places=2)
+    withdrawals = serializers.DecimalField(max_digits=10, decimal_places=2)
+    monthly_graph = serializers.ListField()
+    yearly_graph = serializers.ListField()
+
+class PurchaseHistorySerializer(serializers.Serializer):
+    class Meta:
+        model = PurchaseHistory
+        fields = '__all__'
+
+ 

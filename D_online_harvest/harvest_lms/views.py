@@ -9,7 +9,7 @@ from drf_spectacular.utils import (
 from django.conf import settings
 from django.utils import timezone
 from django.utils.timezone import now
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.core.mail import send_mail
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -20,14 +20,17 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
 from django.db.models import Q,Sum,Avg,Count
+from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 
 
 from .serializers import(
+    AdvancedInformationSerializer,
     AssignmentSerializer,
     CompletedSerializer,
+    CourseCurriculumSerializer,
     CoursePerformanceSerializer,
     CourseSerializer,
     InstructorEarningsSerializer,
@@ -35,6 +38,7 @@ from .serializers import(
     InstructorCourseCardSerializer,
     NotificationSerializer,
     OverdueSerializer,
+    PublishCourseSerializer,
     SignupSerializer,
     SigninSerializer,
     SignoutSerializer,
@@ -44,14 +48,25 @@ from .serializers import(
     StudentDashboardSerializer,
     ContinueWatchingSerializer,
     CoursesListSerializer,
+    TransactionHistorySerializer,
     UpcomingEventSerializer,
     UpcomingTaskSerializer,
     SummarySerializer,
+    ConversationListSerializer,
+    ConversationDetailSerializer,
+    MessageSerializer,
+    StartConversationSerializer,
+    BasicInformationSerializer,
+    EarningsDashboardSerializer,
+    PurchaseHistorySerializer,
 )
 
 from .models import( 
     Assignment,
     Completed,
+    Conversation,
+    CourseCurriculum,
+    Message,
     LessonProgress,
     Lesson,
     Notification,
@@ -67,7 +82,11 @@ from .models import(
     Task,
     Course,
     InstructorEarning,
-    Revenue
+    Revenue,
+    BasicInformation,
+    AdvancedInformation,
+    TransactionHistory,
+    PurchaseHistory
     
 )
 from harvest_lms import models
@@ -820,8 +839,11 @@ class NotificationListView(APIView):
         notifications = Notification.objects.filter(user=user).order_by('-created_at')
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data)
+    
+
 @extend_schema(
     tags=["Instructor Notifications"],
+    summary="Mark a notification as read"
 )
 # Mark notification as read
 class MarkNotificationAsReadView(APIView):
@@ -902,3 +924,345 @@ class InstructorCourseDeleteView(DestroyAPIView):
 
     def get_queryset(self):
         return Course.objects.filter(author=self.request.user) 
+
+@extend_schema(
+    tags=["Conversations and Messaging"],
+)
+# List all conversations (chat list)
+class ConversationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        conversations = Conversation.objects.filter(instructor=request.user)
+        serializer = ConversationListSerializer(conversations, many=True)
+        return Response(serializer.data)
+
+@extend_schema(
+    tags=["Conversations and Messaging"],
+)
+# Fetch conversation thread
+class ConversationDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, convo_id):
+        convo = get_object_or_404(Conversation, id=convo_id, instructor=request.user)
+        serializer = ConversationDetailSerializer(convo)
+        convo.messages.filter(is_read=False).update(is_read=True)
+        return Response(serializer.data)
+
+@extend_schema(
+    tags=["Conversations and Messaging"],
+    request=MessageSerializer,
+    responses=MessageSerializer,
+)
+# Send a message
+class SendMessageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, convo_id):
+        convo = get_object_or_404(Conversation, id=convo_id)
+        msg = Message.objects.create(
+            conversation=convo,
+            sender=request.user,
+            content=request.data.get("content")
+        )
+        return Response(MessageSerializer(msg).data)
+
+@extend_schema(
+    tags=["Conversations and Messaging"],
+    request=StartConversationSerializer,
+    responses=StartConversationSerializer,
+)
+# Start a new conversation
+class StartConversationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        student_id = request.data.get("student_id")
+        convo, created = Conversation.objects.get_or_create(
+            instructor=request.user,
+            student_id=student_id
+        )
+        return Response({"conversation_id": convo.id, "new": created})
+
+@extend_schema(
+    tags=["Conversations and Messaging"],
+)   
+# Delete conversation
+class DeleteConversationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, convo_id):
+        convo = get_object_or_404(Conversation, id=convo_id, instructor=request.user)
+        convo.delete()
+        return Response({"detail": "Conversation deleted"})
+
+@extend_schema(
+    tags=["Conversations and Messaging"],
+)
+# Block user
+class BlockConversationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, convo_id):
+        convo = get_object_or_404(Conversation, id=convo_id, instructor=request.user)
+        convo.is_blocked = True
+        convo.save()
+        return Response({"detail": "User blocked"})
+    
+@extend_schema(
+    tags=["Basic Information"],
+    request=BasicInformationSerializer,
+    responses=BasicInformationSerializer,
+)
+class BasicInformationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = BasicInformationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+
+        return Response({
+            "message": "Basic information saved successfully",
+            "data": serializer.data
+        })
+
+@extend_schema(
+    tags=["Advanced Information"],
+    request=AdvancedInformationSerializer,
+    responses=AdvancedInformationSerializer,
+)
+class AdvancedInformationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AdvancedInformationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+
+        return Response({
+            "message": "Advanced information saved successfully",
+            "data": serializer.data
+        })
+
+@extend_schema(
+    tags=["Course Curriculum"],
+    request=CourseCurriculumSerializer,
+    responses=CourseCurriculumSerializer,
+)
+class CourseCurriculumView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CourseCurriculumSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+
+        return Response({
+            "message": "Course curriculum saved successfully",
+            "data": serializer.data
+        })
+
+@extend_schema(
+    tags=["Course Curriculum"],
+    request=CourseCurriculumSerializer,
+    responses=CourseCurriculumSerializer,
+)
+class CourseCurriculumUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        try:
+            curriculum = CourseCurriculum.objects.get(pk=pk, user=request.user)
+        except CourseCurriculum.DoesNotExist:
+            return Response({"error": "Curriculum not found"}, status=404)
+
+        serializer = CourseCurriculumSerializer(curriculum, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+            "message": "Course curriculum updated successfully",
+            "data": serializer.data
+        })
+
+    def patch(self, request, pk):
+        try:
+            curriculum = CourseCurriculum.objects.get(pk=pk, user=request.user)
+        except CourseCurriculum.DoesNotExist:
+            return Response({"error": "Curriculum not found"}, status=404)
+
+        serializer = CourseCurriculumSerializer(curriculum, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+            "message": "Course curriculum partially updated",
+            "data": serializer.data
+        })
+
+@extend_schema(
+    tags=["Course Curriculum"],
+)
+class CourseCurriculumDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            curriculum = CourseCurriculum.objects.get(pk=pk, user=request.user)
+        except CourseCurriculum.DoesNotExist:
+            return Response({"error": "Curriculum not found"}, status=404)
+
+        curriculum.delete()
+
+        return Response({"message": "Course curriculum deleted successfully"}, status=200)
+
+@extend_schema(
+    tags=["Publish Course"],
+    request=PublishCourseSerializer,
+    responses=PublishCourseSerializer,
+)
+class PublishCourseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = PublishCourseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+
+        return Response({
+            "message": "Course published successfully",
+            "data": serializer.data
+        })
+@extend_schema(
+    tags=["Instructor Earnings Dashboard"],
+    summary="Retrieve the logged-in instructor's earnings dashboard data"
+)
+class EarningsDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        instructor = request.user
+
+        # BASE QUERY 
+        base_qs = Revenue.objects.filter(course__author=instructor)
+
+        # CARD METRICS 
+
+        total_earning = base_qs.aggregate(total=Sum("amount"))["total"] or 0
+        current_balance = total_earning  # Until withdrawal system exists
+
+        last_7_days = timezone.now() - timedelta(days=7)
+        pending_payout = base_qs.filter(created_at__gte=last_7_days)\
+                                .aggregate(total=Sum("amount"))["total"] or 0
+
+        total_revenue = total_earning  # Same metric for now
+
+        card_data = {
+            "total_earning": {"amount": total_earning, "percentage_change": 36},
+            "current_balance": {"amount": current_balance, "percentage_change": -14},
+            "pending_payout": {"amount": pending_payout, "percentage_change": 36},
+            "total_revenue": {"amount": total_revenue, "percentage_change": 36},
+        }
+
+        # WEEKLY GRAPH (Last 12 weeks) 
+        weekly = base_qs.annotate(week=TruncWeek("created_at")) \
+                        .values("week") \
+                        .annotate(total=Sum("amount")) \
+                        .order_by("week")
+
+        weekly_chart = [
+            {"week": str(row["week"].date()), "earning": float(row["total"])}
+            for row in weekly
+        ]
+
+        # MONTHLY GRAPH (Jan–Dec) 
+        monthly = base_qs.annotate(month=TruncMonth("created_at")) \
+                         .values("month") \
+                         .annotate(total=Sum("amount")) \
+                         .order_by("month")
+
+        monthly_chart = []
+        for m in range(1, 12 + 1):
+            month_total = 0
+            for row in monthly:
+                if row["month"].month == m:
+                    month_total = float(row["total"])
+            monthly_chart.append({
+                "month": m,
+                "earning": month_total
+            })
+
+        # YEARLY GRAPH (Last 5 years) 
+        yearly = base_qs.annotate(year=TruncYear("created_at")) \
+                        .values("year") \
+                        .annotate(total=Sum("amount")) \
+                        .order_by("year")
+
+        yearly_chart = [
+            {"year": row["year"].year, "earning": float(row["total"])}
+            for row in yearly
+        ]
+
+        return Response({
+            "message": "Earnings dashboard fetched successfully",
+            "cards": card_data,
+            "earning_overtime": {
+                "weekly": weekly_chart,
+                "monthly": monthly_chart,
+                "yearly": yearly_chart,
+            }
+        })
+# Instructor Transaction Summary Table
+@extend_schema(
+    tags=["Instructor Earnings Dashboard"],
+    summary="Retrieve transaction summary for the logged-in instructor"
+
+)
+
+class TransactionHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        courses = Course.objects.all()
+        summary_data = []
+
+        for course in courses:
+            # total enrolled students
+            total_students = course.enrollments.count()
+
+            # sum of all successful payments for this course
+            total_amount = TransactionHistory.objects.filter(
+                course=course,
+                status="success"
+            ).aggregate(total=Sum("amount"))["total"] or 0
+
+            # pick a date: latest transaction date or course created_at
+            latest_transaction = TransactionHistory.objects.filter(course=course).order_by("-created_at").first()
+            date_value = latest_transaction.created_at if latest_transaction else course.created_at
+
+            summary_data.append({
+                "date": date_value,
+                "course_name": course.title,
+                "total_students": total_students,
+                "total_amount": total_amount,
+                "status": "Active"  # or anything you want
+            })
+
+        serializer = TransactionHistorySerializer(summary_data, many=True)
+        return Response({"summary": serializer.data})
+    
+ # Purchase History View   
+@extend_schema(
+    tags=["Purchase History"],
+    summary="Retrieve the logged-in user's purchase history"
+)
+class PurchaseHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        purchases = PurchaseHistory.objects.filter(user=user).order_by('-purchase_date')
+        serializer = PurchaseHistorySerializer(purchases, many=True)
+        return Response(serializer.data)
