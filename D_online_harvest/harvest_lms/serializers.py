@@ -1,3 +1,4 @@
+from symtable import Class
 from tkinter import Message
 from rest_framework import serializers  # type: ignore
 from django.contrib.auth import get_user_model
@@ -23,7 +24,8 @@ from .models import (
     CourseCurriculum,
     PublishCourse,
     TransactionHistory,
-    PurchaseHistory
+    PurchaseHistory,
+    Transaction
 
 )
 from django.core.validators import validate_email
@@ -325,7 +327,7 @@ class UpcomingTaskSerializer(serializers.ModelSerializer):
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        fields = ['id', 'title', 'message', 'notification_type', 'is_read', 'created_at']
+        fields = '__all__'
 
 class InstructorEarningsSerializer(serializers.ModelSerializer):
     earnings = serializers.SerializerMethodField()
@@ -334,7 +336,7 @@ class InstructorEarningsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ['id', 'title', 'image', 'video', 'price', 'earnings', 'views', 'saved']
+        fields = ['id', 'title', 'image', 'video', 'price', 'earnings', 'views', 'saved','duration_hours']
 
     def get_earnings(self, obj):
         # Calculate total earnings from enrollments
@@ -449,3 +451,56 @@ class PurchaseHistorySerializer(serializers.Serializer):
         fields = '__all__'
 
  
+class TopStatisticsSerializer(serializers.Serializer):
+    """Serializer for top 5 statistics cards"""
+    total_students = serializers.IntegerField()
+    student_growth = serializers.DecimalField(max_digits=5, decimal_places=2)
+    total_instructors = serializers.IntegerField()
+    instructor_growth = serializers.DecimalField(max_digits=5, decimal_places=2)
+    active_courses = serializers.IntegerField()
+    course_growth = serializers.DecimalField(max_digits=5, decimal_places=2)
+    total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    revenue_growth = serializers.DecimalField(max_digits=5, decimal_places=2)
+    average_rating = serializers.DecimalField(max_digits=3, decimal_places=2)
+    rating_growth = serializers.DecimalField(max_digits=5, decimal_places=2)
+
+
+class CommissionCardSerializer(serializers.Serializer):
+    """Serializer for commission sidebar cards"""
+    lifetime_courses_commission = serializers.DecimalField(max_digits=12, decimal_places=2)
+    lifetime_received_commission = serializers.DecimalField(max_digits=12, decimal_places=2)
+    lifetime_pending_commission = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class UserGrowthDataSerializer(serializers.Serializer):
+    """Serializer for user growth chart (weekly basis)"""
+    week_label = serializers.CharField()
+    students = serializers.IntegerField()
+    instructors = serializers.IntegerField()
+    courses = serializers.IntegerField()
+
+
+class TopPerformingCourseSerializer(serializers.Serializer):
+    """Serializer for top performing courses table"""
+    id = serializers.IntegerField()
+    course_title = serializers.CharField()
+    instructor = serializers.CharField()
+    enrollment = serializers.IntegerField()
+    revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    rating = serializers.DecimalField(max_digits=3, decimal_places=2)
+
+
+class AdminDashboardSerializer(serializers.Serializer):
+    """ serializer for admin dashboard"""
+    top_statistics = TopStatisticsSerializer()
+    commission_cards = CommissionCardSerializer()
+    user_growth_chart = UserGrowthDataSerializer(many=True)
+    top_performing_courses = TopPerformingCourseSerializer(many=True)
+
+
+class TransactionSerializer(serializers.Serializer):
+    """ serializer for transactions admin dashboard"""
+    class Meta:
+        model = Transaction
+        fields = '__all__'
+

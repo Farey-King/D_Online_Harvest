@@ -125,7 +125,7 @@ class Enrollment(models.Model):
         ('other', 'Other'),
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    course = models.CharField(max_length=255)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='front-end')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in-progress')
     price = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
@@ -281,17 +281,13 @@ class UpcomingTask(models.Model):
 
 class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    image = models.ImageField(upload_to='notifications/', blank=True, null=True)
     title = models.CharField(max_length=255)
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
+    draft_date = models.CharField(max_length=100)
+    message = models.CharField(max_length=1000)
+    url = models.URLField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    notification_type = models.CharField(max_length=50, choices=[
-        ('enrollment', 'Enrollment'),
-        ('message', 'Message'),
-        ('refund', 'Refund'),
-        ('submission', 'Submission'),
-        ('system', 'System'),
-    ])
+   
 
     def __str__(self):
         return f"{self.user.full_name} - {self.title}"
@@ -417,8 +413,18 @@ class PublishCourse(models.Model):
     congratulations_message = models.TextField()
     published_at = models.DateTimeField(null=True, blank=True)
 
+class Transaction(models.Model):
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="customer_transactions")
+    date = models.DateTimeField(auto_now_add=True)
+    type = models.CharField(max_length=50, choices=[
+        ('credit', 'Credit'),
+        ('debit', 'Debit'),
+    ])
+    amount = models.DecimalField(max_digits=10, decimal_places=2)  
+
+
 class TransactionHistory(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transactions")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transaction_history")
     date = models.DateTimeField(auto_now_add=True)
     course_name = models.CharField(max_length=255)
     student = models.CharField(max_length=255)
@@ -432,7 +438,7 @@ class TransactionHistory(models.Model):
 
 
     def __str__(self):
-        return f"{self.user.email} - {self.course_name} - {self.amount}"
+        return f"{self.user.email} - {self.course_name} - {self.amount} - {self.transaction_id} - {self.status}"
     
 class PurchaseHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="purchase_history")
@@ -446,3 +452,24 @@ class PurchaseHistory(models.Model):
 
     def __str__(self):
         return f"{self.user.email} purchased {self.title} on {self.purchase_date}"
+
+class AdminDashboard(models.Model):
+    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="admin_dashboard")
+    total_users = models.PositiveIntegerField(default=0)
+    total_courses = models.PositiveIntegerField(default=0)
+    total_revenue = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    total_enrollments = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Admin Dashboard - {self.admin.email}"
+
+class AdminStatisticsDetail(models.Model):
+    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="admin_statistics")
+    metric = models.CharField(max_length=100)
+    value = models.DecimalField(max_digits=15, decimal_places=2)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.metric} - {self.value} at {self.recorded_at}"
+    

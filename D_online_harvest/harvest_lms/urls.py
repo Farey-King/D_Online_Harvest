@@ -2,7 +2,7 @@ from django.urls import include, path,re_path
 
 
 
-from  harvest_lms.views import (AdvancedInformationView,
+from  harvest_lms.views import (AdminDashboardView, AdminStatisticsDetailView, AdvancedInformationView,
                                 CompleteLessonView, 
                                 CompletedListView,
                                 ConfirmPasswordResetView, CourseCurriculumDeleteView, CourseCurriculumUpdateView,
@@ -18,7 +18,7 @@ from  harvest_lms.views import (AdvancedInformationView,
                                 NotificationListView, PurchaseHistoryView,
                     RequestPasswordResetView, 
                     SigninView, SignoutView, 
-                    SignupView,ProfileUpdateView, TransactionHistoryView, UpcomingTasksView, 
+                    SignupView,ProfileUpdateView, TransactionHistoryView, Transactionview, UpcomingTasksView, 
                     UserLookupView,
                     StudentDashboardView,
                     CourseListView,
@@ -41,6 +41,7 @@ from  harvest_lms.views import (AdvancedInformationView,
                     CourseCurriculumView,
                     PublishCourseView,
                     EarningsDashboardView,
+                    NotificationView,
                     )
 try:
     from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
@@ -117,6 +118,12 @@ urlpatterns = [
     path("earnings/", EarningsDashboardView.as_view(), name="instructor-earnings"),
     path("publish-course/", PublishCourseView.as_view(), name="publish-course"),
     path("transaction-history/", TransactionHistoryView.as_view(), name="transaction-history"),
+     # Admin dashboard endpoint
+    path('admin/dashboard/', AdminDashboardView.as_view(), name='admin-dashboard'),
+    path("admin/notifications/", NotificationView.as_view(), name="admin-notifications"),
+    # Detailed statistics endpoints
+    path('admin/statistics/<str:metric>/', AdminStatisticsDetailView.as_view(), name='admin-statistics-detail'),
+    path('transaction/', Transactionview.as_view(), name='transaction-view'),
     
 ]
 

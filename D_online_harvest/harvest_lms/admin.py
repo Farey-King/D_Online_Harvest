@@ -24,7 +24,9 @@ from .models import( AdvancedInformation,
                     Message,
                     BasicInformation,
                     CourseCurriculum,
-                    PublishCourse
+                    PublishCourse,
+                    Transaction,
+                    Notification,
                     
 
 )
@@ -35,6 +37,8 @@ admin.site.register(CourseCurriculum)
 admin.site.register(PublishCourse)
 admin.site.register(CourseSaved)
 admin.site.register(CourseView)
+admin.site.register(Transaction)
+admin.site.register(Notification)
 
 
 admin.site.register(Revenue)
