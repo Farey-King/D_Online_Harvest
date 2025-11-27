@@ -89,6 +89,7 @@ class Course(models.Model):
     video = models.URLField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=50, choices=[('draft', 'Draft'), ('published', 'Published')], default='draft')
 
     def __str__(self):
         return self.title
@@ -130,6 +131,7 @@ class Enrollment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in-progress')
     price = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     progress = models.DecimalField(max_digits=4, decimal_places=2, default=0)  # example: 0.35 = 35%
+    enrolled_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.user} → {self.course}"
@@ -385,6 +387,7 @@ class BasicInformation(models.Model):
     subtitle_language = models.CharField(max_length=50, choices=SUBTITLE_LANGUAGE, default='english')
     course_level = models.CharField(max_length=50, choices=COURSE_LEVEL_CHOICES, default='beginner')
     duration = models.CharField(max_length=50, choices=DURATION_CHOICES, default='short')
+    status = models.CharField(max_length=50, choices=[('draft', 'Draft'), ('published', 'Published')], default='draft')
 
 class AdvancedInformation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="instructor_advanced")

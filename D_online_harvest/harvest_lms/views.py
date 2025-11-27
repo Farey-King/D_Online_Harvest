@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, render
 from django.core.mail import send_mail
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from django.apps import apps
 from rest_framework.response import Response
 from rest_framework import status,permissions,generics
 from rest_framework.views import APIView
@@ -60,6 +61,7 @@ from .serializers import(
     BasicInformationSerializer,
     EarningsDashboardSerializer,
     PurchaseHistorySerializer,
+    AdminDashboardSerializer,
 )
 
 from .models import( 
@@ -708,12 +710,12 @@ class InstructorDashboardCardsView(APIView):
         
         current_earnings = InstructorEarning.objects.filter(
             instructor=user,
-            created_at__gte=this_month
+            enrolled_at__gte=this_month
         ).aggregate(total=Sum("amount"))["total"] or 0
 
         previous_earnings = InstructorEarning.objects.filter(
             instructor=user,
-            created_at__range=[last_month, last_month_last_day]
+            enrolled_at__range=[last_month, last_month_last_day]
         ).aggregate(total=Sum("amount"))["total"] or 0
 
         earnings_change = self.get_percentage_change(current_earnings, previous_earnings)
@@ -725,7 +727,7 @@ class InstructorDashboardCardsView(APIView):
 
         previous_courses = Course.objects.filter(
             author=user,
-            created_at__range=[last_month, last_month_last_day]
+            enrolled_at__range=[last_month, last_month_last_day]
         ).count()
 
         courses_change = self.get_percentage_change(current_courses, previous_courses)
@@ -1176,7 +1178,7 @@ class EarningsDashboardView(APIView):
         current_balance = total_earning  # Until withdrawal system exists
 
         last_7_days = timezone.now() - timedelta(days=7)
-        pending_payout = base_qs.filter(created_at__gte=last_7_days)\
+        pending_payout = base_qs.filter(enrolled_at__gte=last_7_days)\
                                 .aggregate(total=Sum("amount"))["total"] or 0
 
         total_revenue = total_earning  # Same metric for now
@@ -1189,9 +1191,9 @@ class EarningsDashboardView(APIView):
         }
 
         # WEEKLY GRAPH (Last 12 weeks) 
-        weekly = base_qs.annotate(week=TruncWeek("created_at")) \
+        weekly = base_qs.annotate(week=TruncWeek("enrolled_at")) \
                         .values("week") \
-                        .annotate(total=Sum("amount")) \
+                        .annotate(total=Sum("price")) \
                         .order_by("week")
 
         weekly_chart = [
@@ -1200,9 +1202,9 @@ class EarningsDashboardView(APIView):
         ]
 
         # MONTHLY GRAPH (Jan–Dec) 
-        monthly = base_qs.annotate(month=TruncMonth("created_at")) \
+        monthly = base_qs.annotate(month=TruncMonth("enrolled_at")) \
                          .values("month") \
-                         .annotate(total=Sum("amount")) \
+                         .annotate(total=Sum("price")) \
                          .order_by("month")
 
         monthly_chart = []
@@ -1217,9 +1219,9 @@ class EarningsDashboardView(APIView):
             })
 
         # YEARLY GRAPH (Last 5 years) 
-        yearly = base_qs.annotate(year=TruncYear("created_at")) \
+        yearly = base_qs.annotate(year=TruncYear("enrolled_at")) \
                         .values("year") \
-                        .annotate(total=Sum("amount")) \
+                        .annotate(total=Sum("price")) \
                         .order_by("year")
 
         yearly_chart = [
@@ -1260,9 +1262,9 @@ class TransactionHistoryView(APIView):
                 status="success"
             ).aggregate(total=Sum("amount"))["total"] or 0
 
-            # pick a date: latest transaction date or course created_at
-            latest_transaction = TransactionHistory.objects.filter(course=course).order_by("-created_at").first()
-            date_value = latest_transaction.created_at if latest_transaction else course.created_at
+            # pick a date: latest transaction date or course enrollment date
+            latest_transaction = TransactionHistory.objects.filter(course=course).order_by("-enrolled_at").first()
+            date_value = latest_transaction.enrolled_at if latest_transaction else course.enrolled_at
 
             summary_data.append({
                 "date": date_value,
@@ -1296,350 +1298,215 @@ class IsAdminOrSuperuser(IsAuthenticated):
         return (super().has_permission(request, view) and 
                 (request.user.is_staff or request.user.is_superuser))
 
-
 class AdminDashboardView(APIView):
-    """
-    Complete Admin Dashboard API
-    GET: Returns all dashboard components:
-    - Top 5 statistics cards (Students, Instructors, Courses, Revenue, Rating)
-    - Sidebar commission cards (3 cards)
-    - User growth analytics chart (weekly)
-    - Top performing courses table
-    """
     permission_classes = [IsAdminOrSuperuser]
-    
+
     def get(self, request):
-        # Get query parameter for time period (defaults to current week)
-        period = request.query_params.get('period', 'week')  # week, month, year
-        
-        # 1. Get Top 5 Statistics Cards
-        top_statistics = self.get_top_statistics(period)
-        
-        # 2. Get Sidebar Commission Cards
-        commission_cards = self.get_commission_cards()
-        
-        # 3. Get User Growth Chart Data (Weekly)
-        user_growth_chart = self.get_user_growth_chart(period)
-        
-        # 4. Get Top Performing Courses Table
-        top_performing_courses = self.get_top_performing_courses()
-        
-        # Prepare dashboard response
-        dashboard_data = {
-            'top_statistics': top_statistics,
-            'commission_cards': commission_cards,
-            'user_growth_chart': user_growth_chart,
-            'top_performing_courses': top_performing_courses
+        period = request.query_params.get('period', 'week')
+
+        data = {
+            "top_statistics": self.get_top_statistics(period),
+            "commission_cards": self.get_commission_cards(),
+            "user_growth_chart": self.get_user_growth_chart(period),
+            "top_performing_courses": self.get_top_performing_courses()
         }
-        
-        serializer = AdminDashboardSerializer(data=dashboard_data)
-        if serializer.is_valid():
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+        return Response(data, status=status.HTTP_200_OK)
+
+    # ---------------------------------------------
+    # TOP STATISTICS
+    # ---------------------------------------------
     def get_top_statistics(self, period):
-        """
-        Calculate Top 5 Statistics Cards:
-        1. Total Students
-        2. Total Instructors  
-        3. Active Courses
-        4. Total Revenue
-        5. Average Rating
-        Each with growth percentage
-        """
-        end_date = timezone.now()
-        
-        # Determine time ranges for growth calculation
-        if period == 'week':
-            current_start = end_date - timedelta(days=7)
-            previous_start = end_date - timedelta(days=14)
-        elif period == 'month':
-            current_start = end_date - timedelta(days=30)
-            previous_start = end_date - timedelta(days=60)
-        else:  # year
-            current_start = end_date - timedelta(days=365)
-            previous_start = end_date - timedelta(days=730)
-        
-        # 1. TOTAL STUDENTS
-        total_students = User.objects.filter(
-            role='student'
-        ).count()
-        
-        current_period_students = User.objects.filter(
-            role='student',
-            date_joined__gte=current_start
-        ).count()
-        
-        previous_period_students = User.objects.filter(
-            role='student',
+        end = timezone.now()
+
+        if period == "week":
+            current_start = end - timedelta(days=7)
+            previous_start = end - timedelta(days=14)
+        elif period == "month":
+            current_start = end - timedelta(days=30)
+            previous_start = end - timedelta(days=60)
+        else:
+            current_start = end - timedelta(days=365)
+            previous_start = end - timedelta(days=730)
+
+        # Students
+        total_students = User.objects.filter(role="student").count()
+        current_students = User.objects.filter(role="student", date_joined__gte=current_start).count()
+        previous_students = User.objects.filter(
+            role="student",
             date_joined__gte=previous_start,
             date_joined__lt=current_start
         ).count()
-        
-        student_growth = self.calculate_growth(current_period_students, previous_period_students)
-        
-        # 2. TOTAL INSTRUCTORS
-        total_instructors = User.objects.filter(
-            Q(role='instructor') | Q(is_staff=True)
-        ).count()
-        
-        current_period_instructors = User.objects.filter(
-            Q(role='instructor') | Q(is_staff=True),
+        student_growth = self.calculate_growth(current_students, previous_students)
+
+        # Instructors
+        total_instructors = User.objects.filter(Q(role="instructor") | Q(is_staff=True)).count()
+        current_instructors = User.objects.filter(
+            Q(role="instructor") | Q(is_staff=True),
             date_joined__gte=current_start
         ).count()
-        
-        previous_period_instructors = User.objects.filter(
-            Q(role='instructor') | Q(is_staff=True),
+        previous_instructors = User.objects.filter(
+            Q(role="instructor") | Q(is_staff=True),
             date_joined__gte=previous_start,
             date_joined__lt=current_start
         ).count()
-        
-        instructor_growth = self.calculate_growth(current_period_instructors, previous_period_instructors)
-        
-        # 3. ACTIVE COURSES
-        from django.apps import apps
-        Course = apps.get_model('courses', 'Course')  # Adjust app name as needed
-        
-        active_courses = Course.objects.filter(
-            status='published'
-        ).count()
-        
-        current_period_courses = Course.objects.filter(
-            status='published',
+        instructor_growth = self.calculate_growth(current_instructors, previous_instructors)
+
+        # Courses
+        Course = apps.get_model("harvest_lms", "Course")
+
+        total_courses = Course.objects.filter(status="published").count()
+        current_courses = Course.objects.filter(
+            status="published",
             created_at__gte=current_start
         ).count()
-        
-        previous_period_courses = Course.objects.filter(
-            status='published',
+        previous_courses = Course.objects.filter(
+            status="published",
             created_at__gte=previous_start,
             created_at__lt=current_start
         ).count()
-        
-        course_growth = self.calculate_growth(current_period_courses, previous_period_courses)
-        
-        # 4. TOTAL REVENUE
-        Enrollment = apps.get_model('courses', 'Enrollment')  # Adjust app name as needed
-        
-        total_revenue = Enrollment.objects.aggregate(
-            total=Sum('amount_paid')
-        )['total'] or 0
-        
-        current_period_revenue = Enrollment.objects.filter(
-            created_at__gte=current_start
-        ).aggregate(
-            total=Sum('amount_paid')
-        )['total'] or 0
-        
-        previous_period_revenue = Enrollment.objects.filter(
-            created_at__gte=previous_start,
-            created_at__lt=current_start
-        ).aggregate(
-            total=Sum('amount_paid')
-        )['total'] or 0
-        
-        revenue_growth = self.calculate_growth(float(current_period_revenue), float(previous_period_revenue))
-        
-        # 5. AVERAGE RATING
-        Review = apps.get_model('courses', 'Review')  # Adjust app name as needed
-        
-        average_rating = Review.objects.aggregate(
-            avg=Avg('rating')
-        )['avg'] or 0
-        
-        current_period_avg_rating = Review.objects.filter(
-            created_at__gte=current_start
-        ).aggregate(
-            avg=Avg('rating')
-        )['avg'] or 0
-        
-        previous_period_avg_rating = Review.objects.filter(
-            created_at__gte=previous_start,
-            created_at__lt=current_start
-        ).aggregate(
-            avg=Avg('rating')
-        )['avg'] or 0
-        
-        rating_growth = self.calculate_growth(float(current_period_avg_rating), float(previous_period_avg_rating))
-        
+        course_growth = self.calculate_growth(current_courses, previous_courses)
+
+        # Revenue
+        Enrollment = apps.get_model("harvest_lms", "Enrollment")
+
+        total_revenue = Enrollment.objects.aggregate(total=Sum("price"))["total"] or 0
+        current_revenue = Enrollment.objects.filter(
+            enrolled_at__gte=current_start
+        ).aggregate(total=Sum("price"))["total"] or 0
+        previous_revenue = Enrollment.objects.filter(
+            enrolled_at__gte=previous_start,
+            enrolled_at__lt=current_start
+        ).aggregate(total=Sum("price"))["total"] or 0
+        revenue_growth = self.calculate_growth(current_revenue, previous_revenue)
+
+        # Rating
+        Review = apps.get_model("harvest_lms", "Review")
+        average_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"] or 0
+
         return {
-            'total_students': total_students,
-            'student_growth': student_growth,
-            'total_instructors': total_instructors,
-            'instructor_growth': instructor_growth,
-            'active_courses': active_courses,
-            'course_growth': course_growth,
-            'total_revenue': float(total_revenue),
-            'revenue_growth': revenue_growth,
-            'average_rating': round(float(average_rating), 2),
-            'rating_growth': rating_growth
+            "total_students": total_students,
+            "student_growth": student_growth,
+            "total_instructors": total_instructors,
+            "instructor_growth": instructor_growth,
+            "active_courses": total_courses,
+            "course_growth": course_growth,
+            "total_revenue": float(total_revenue),
+            "revenue_growth": revenue_growth,
+            "average_rating": round(float(average_rating), 2),
         }
-    
+
+    # ---------------------------------------------
+    # COMMISSION CARDS
+    # ---------------------------------------------
     def get_commission_cards(self):
-        """
-        Calculate Sidebar Commission Cards:
-        1. Life Time Courses Commission
-        2. Life Time Received Commission
-        3. Life Time Pending Commission
-        """
-        from django.apps import apps
-        Enrollment = apps.get_model('courses', 'Enrollment')
-        
-        # Assuming commission structure (adjust based on your business logic)
-        PLATFORM_COMMISSION_RATE = 0.20  # 20% commission
-        
-        # Life Time Courses Commission (Total platform earnings from all courses)
-        total_course_revenue = Enrollment.objects.aggregate(
-            total=Sum('amount_paid')
-        )['total'] or 0
-        
-        lifetime_courses_commission = float(total_course_revenue) * PLATFORM_COMMISSION_RATE
-        
-        # Life Time Received Commission (Paid to instructors)
-        # Assuming you have a Commission or Payout model
-        try:
-            Commission = apps.get_model('courses', 'Commission')
-            lifetime_received_commission = Commission.objects.filter(
-                status='paid'
-            ).aggregate(
-                total=Sum('amount')
-            )['total'] or 0
-        except LookupError:
-            # If no Commission model, calculate from enrollments
-            lifetime_received_commission = float(total_course_revenue) * (1 - PLATFORM_COMMISSION_RATE)
-        
-        # Life Time Pending Commission (Awaiting payment to instructors)
-        try:
-            lifetime_pending_commission = Commission.objects.filter(
-                status='pending'
-            ).aggregate(
-                total=Sum('amount')
-            )['total'] or 0
-        except:
-            # Calculate pending based on recent enrollments not yet paid out
-            recent_cutoff = timezone.now() - timedelta(days=30)  # Adjust based on payout schedule
-            recent_revenue = Enrollment.objects.filter(
-                created_at__gte=recent_cutoff
-            ).aggregate(
-                total=Sum('amount_paid')
-            )['total'] or 0
-            lifetime_pending_commission = float(recent_revenue) * (1 - PLATFORM_COMMISSION_RATE)
-        
+        Enrollment = apps.get_model("harvest_lms", "Enrollment")
+
+        PLATFORM_RATE = 0.20
+
+        total_revenue = Enrollment.objects.aggregate(total=Sum("price"))["total"] or 0
+
+        lifetime_commission = total_revenue * PLATFORM_RATE
+        instructor_share = total_revenue * (1 - PLATFORM_RATE)
+
         return {
-            'lifetime_courses_commission': float(lifetime_courses_commission),
-            'lifetime_received_commission': float(lifetime_received_commission),
-            'lifetime_pending_commission': float(lifetime_pending_commission)
+            "lifetime_courses_commission": float(lifetime_commission),
+            "lifetime_received_commission": float(instructor_share),
+            "lifetime_pending_commission": float(lifetime_commission * 0.10),  # Example
         }
-    
+
+    # ---------------------------------------------
+    # USER GROWTH CHART
+    # ---------------------------------------------
     def get_user_growth_chart(self, period):
-        """
-        Get User Growth Chart Data (Weekly basis)
-        Returns data points for students, instructors, and courses over time
-        """
-        from django.apps import apps
-        Course = apps.get_model('courses', 'Course')
-        
-        end_date = timezone.now()
-        
-        # Determine number of data points based on period
-        if period == 'week':
-            days = 7
-            data_points = 7  # Daily for a week
-        elif period == 'month':
-            days = 30
-            data_points = 12  # Every 2-3 days for a month
-        else:  # year
-            days = 365
-            data_points = 12  # Monthly for a year
-        
-        chart_data = []
-        interval_days = days / data_points
-        
-        for i in range(data_points):
-            period_end = end_date - timedelta(days=i * interval_days)
-            period_start = period_end - timedelta(days=interval_days)
-            
-            # Count students in this period
-            students_count = User.objects.filter(
-                role='student',
-                date_joined__gte=period_start,
-                date_joined__lt=period_end
+        Course = apps.get_model("harvest_lms", "Course")
+
+        end = timezone.now()
+
+        if period == "week":
+            interval = 1
+            points = 7
+        elif period == "month":
+            interval = 2.5
+            points = 12
+        else:
+            interval = 30
+            points = 12
+
+        data = []
+
+        for i in range(points):
+            start = end - timedelta(days=(i + 1) * interval)
+            stop = end - timedelta(days=i * interval)
+
+            students = User.objects.filter(
+                role="student", date_joined__gte=start, date_joined__lt=stop
             ).count()
-            
-            # Count instructors in this period
-            instructors_count = User.objects.filter(
-                Q(role='instructor') | Q(is_staff=True),
-                date_joined__gte=period_start,
-                date_joined__lt=period_end
+
+            instructors = User.objects.filter(
+                Q(role="instructor") | Q(is_staff=True),
+                date_joined__gte=start,
+                date_joined__lt=stop,
             ).count()
-            
-            # Count courses created in this period
-            courses_count = Course.objects.filter(
-                created_at__gte=period_start,
-                created_at__lt=period_end
+
+            courses = Course.objects.filter(
+                created_at__gte=start, created_at__lt=stop
             ).count()
-            
-            # Generate week label
-            if period == 'week':
-                week_label = str(data_points - i)
-            elif period == 'month':
-                week_label = f"W{data_points - i}"
-            else:
-                week_label = period_start.strftime('%b')
-            
-            chart_data.insert(0, {
-                'week_label': week_label,
-                'students': students_count,
-                'instructors': instructors_count,
-                'courses': courses_count
-            })
-        
-        return chart_data
-    
+
+            data.insert(
+                0,
+                {
+                    "label": stop.strftime("%b %d"),
+                    "students": students,
+                    "instructors": instructors,
+                    "courses": courses,
+                },
+            )
+
+        return data
+
+    # ---------------------------------------------
+    # TOP PERFORMING COURSES
+    # ---------------------------------------------
     def get_top_performing_courses(self):
-        """
-        Get Top Performing Courses Table
-        Shows: Course title, Instructor name, Enrollment count, Revenue, Rating
-        """
-        from django.apps import apps
-        Course = apps.get_model('courses', 'Course')
-        
-        top_courses = Course.objects.filter(
-            status='published'
-        ).annotate(
-            enrollment_count=Count('enrollments'),
-            total_revenue=Sum('enrollments__amount_paid'),
-            avg_rating=Avg('reviews__rating')
-        ).order_by('-total_revenue')[:10]  # Top 10 courses by revenue
-        
-        courses_data = []
-        
-        for course in top_courses:
-            # Get instructor name
-            instructor_name = 'Unknown'
-            if hasattr(course, 'instructor'):
-                instructor = course.instructor
-                instructor_name = f"{instructor.first_name} {instructor.last_name}".strip()
-                if not instructor_name:
-                    instructor_name = instructor.email.split('@')[0]
-            
-            courses_data.append({
-                'id': course.id,
-                'course_title': course.title,
-                'instructor': instructor_name,
-                'enrollment': course.enrollment_count or 0,
-                'revenue': float(course.total_revenue or 0),
-                'rating': round(float(course.avg_rating or 0), 2)
-            })
-        
-        return courses_data
-    
+        Course = apps.get_model("harvest_lms", "Course")
+
+        courses = (
+            Course.objects.filter(status="published")
+            .annotate(
+                enrollment_count=Count("enrollment"),
+                total_revenue=Sum("enrollment__price"),
+                avg_rating=Avg("reviews__rating"),
+            )
+            .order_by("-total_revenue")[:10]
+        )
+
+        results = []
+
+        for c in courses:
+            instructor = c.author
+            instructor_name = (
+                f"{instructor.first_name} {instructor.last_name}".strip()
+                or instructor.email.split("@")[0]
+            )
+
+            results.append(
+                {
+                    "id": c.id,
+                    "course_title": c.title,
+                    "instructor": instructor_name,
+                    "enrollment": c.enrollment_count or 0,
+                    "revenue": float(c.total_revenue or 0),
+                    "rating": round(float(c.avg_rating or 0), 2),
+                }
+            )
+
+        return results
+
     def calculate_growth(self, current, previous):
-        """Calculate percentage growth between two periods"""
         if previous == 0:
             return 100.0 if current > 0 else 0.0
-        growth = ((current - previous) / previous) * 100
-        return round(growth, 2)
+        return round(((current - previous) / previous) * 100, 2)
 
 
 class AdminStatisticsDetailView(APIView):
@@ -1724,7 +1591,7 @@ class AdminStatisticsDetailView(APIView):
     def get_course_details(self, period):
         """Get detailed course statistics"""
         from django.apps import apps
-        Course = apps.get_model('courses', 'Course')
+        Course = apps.get_model('harvest_lms', 'Course')
         
         total_courses = Course.objects.count()
         published_courses = Course.objects.filter(status='published').count()
@@ -1740,19 +1607,19 @@ class AdminStatisticsDetailView(APIView):
     def get_revenue_details(self, period):
         """Get detailed revenue statistics"""
         from django.apps import apps
-        Enrollment = apps.get_model('courses', 'Enrollment')
+        Enrollment = apps.get_model('harvest_lms', 'Enrollment')
         
         end_date = timezone.now()
         start_date = end_date - timedelta(days=7 if period == 'week' else (30 if period == 'month' else 365))
         
         total_revenue = Enrollment.objects.aggregate(
-            total=Sum('amount_paid')
+            total=Sum('price')
         )['total'] or 0
         
         period_revenue = Enrollment.objects.filter(
-            created_at__gte=start_date
+            enrolled_at__gte=start_date
         ).aggregate(
-            total=Sum('amount_paid')
+            total=Sum('price')
         )['total'] or 0
         
         return {
@@ -1764,7 +1631,7 @@ class AdminStatisticsDetailView(APIView):
     def get_rating_details(self, period):
         """Get detailed rating statistics"""
         from django.apps import apps
-        Review = apps.get_model('courses', 'Review')
+        Review = apps.get_model('harvest_lms', 'Review')
         
         avg_rating = Review.objects.aggregate(avg=Avg('rating'))['avg'] or 0
         total_reviews = Review.objects.count()

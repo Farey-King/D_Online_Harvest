@@ -163,12 +163,13 @@ class AdminDashboardSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['full_name', 'email', 'role']
+        
 # Course Serializer
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['enrolled_at', 'updated_at']
     def create(self, validated_data):
         course = Course.objects.create(**validated_data)
         return course
