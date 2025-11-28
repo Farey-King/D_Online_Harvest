@@ -1502,8 +1502,8 @@ class AdminDashboardView(APIView):
         for c in courses:
             instructor = c.author
             instructor_name = (
-                f"{instructor.first_name} {instructor.last_name}".strip()
-                or instructor.email.split("@")[0]
+                f"{instructor.full_name} " if instructor.full_name else instructor.email.split("@")[0]
+                
             )
 
             results.append(
