@@ -263,6 +263,12 @@ class UploadLessonView(APIView):
 
 from .permissions import IsStudent
 
+class IsAdminOrSuperuser(IsAuthenticated):
+    """Custom permission to only allow admin users"""
+    def has_permission(self, request, view):
+        return (super().has_permission(request, view) and 
+                (request.user.is_staff or request.user.is_superuser))
+
 class EnrollCourseView(APIView):
     permission_classes = [IsStudent]
 
@@ -875,13 +881,16 @@ class MarkNotificationAsReadView(APIView):
 
 )# Post a notification 
 class NotificationView(APIView):
-        permission_classes = [IsAuthenticated]
+        permission_classes = [IsAdminOrSuperuser]
 
         def post(self, request):
-            user = request.user
-            notifications = Notification.objects.filter(user=user).order_by('title')
-            serializer = NotificationSerializer(notifications, many=True)
-            return Response(serializer.data)
+           data = request.data
+           serializer = NotificationSerializer(data=data)
+           serializer.is_valid(raise_exception=True)
+           serializer.save()
+
+
+           return Response(serializer.data)
         
 
 @extend_schema(
@@ -1286,17 +1295,10 @@ class PurchaseHistoryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        purchases = PurchaseHistory.objects.filter(user=user).order_by('-purchase_date')
+        # Return the authenticated user's purchase history
+        purchases = PurchaseHistory.objects.filter(user=request.user).order_by('-id')
         serializer = PurchaseHistorySerializer(purchases, many=True)
         return Response(serializer.data)
-
-
-class IsAdminOrSuperuser(IsAuthenticated):
-    """Custom permission to only allow admin users"""
-    def has_permission(self, request, view):
-        return (super().has_permission(request, view) and 
-                (request.user.is_staff or request.user.is_superuser))
 
 class AdminDashboardView(APIView):
     permission_classes = [IsAdminOrSuperuser]

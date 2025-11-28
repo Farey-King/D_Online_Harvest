@@ -289,6 +289,7 @@ class Notification(models.Model):
     message = models.CharField(max_length=1000)
     url = models.URLField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
    
 
     def __str__(self):

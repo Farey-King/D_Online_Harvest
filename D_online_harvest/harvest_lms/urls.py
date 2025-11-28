@@ -120,9 +120,9 @@ urlpatterns = [
     path("transaction-history/", TransactionHistoryView.as_view(), name="transaction-history"),
      # Admin dashboard endpoint
     path('panel/dashboard/', AdminDashboardView.as_view(), name='admin-dashboard'),
-    path("admin/notifications/", NotificationView.as_view(), name="admin-notifications"),
+    path("panel/admin/notifications/", NotificationView.as_view(), name="admin-notifications"),
     # Detailed statistics endpoints
-    path('admin/statistics/<str:metric>/', AdminStatisticsDetailView.as_view(), name='admin-statistics-detail'),
+    path('panel/admin/statistics/<str:metric>/', AdminStatisticsDetailView.as_view(), name='admin-statistics-detail'),
     path('transaction/', Transactionview.as_view(), name='transaction-view'),
     
 ]
