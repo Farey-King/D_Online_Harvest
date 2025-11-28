@@ -1383,6 +1383,21 @@ class AdminDashboardView(APIView):
         # Rating
         Review = apps.get_model("harvest_lms", "Review")
         average_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"] or 0
+        # Compute average rating for the current and previous period for growth calculation
+        current_average_rating = (
+            Review.objects.filter(created_at__gte=current_start)
+            .aggregate(avg=Avg("rating"))["avg"] or 0
+        )
+        previous_average_rating = (
+            Review.objects.filter(
+                created_at__gte=previous_start,
+                created_at__lt=current_start,
+            )
+            .aggregate(avg=Avg("rating"))["avg"] or 0
+        )
+        rating_growth = self.calculate_growth(
+            float(current_average_rating), float(previous_average_rating)
+        )
 
         return {
             "total_students": total_students,
@@ -1394,6 +1409,7 @@ class AdminDashboardView(APIView):
             "total_revenue": float(total_revenue),
             "revenue_growth": revenue_growth,
             "average_rating": round(float(average_rating), 2),
+            "rating_growth": rating_growth,
         }
 
     # ---------------------------------------------
