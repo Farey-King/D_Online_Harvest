@@ -163,16 +163,16 @@ class SigninView(APIView):
         else:  # If using Django groups
             if user.is_superuser:
                 role = "admin"
-            elif user.groups.filter(name="teacher").exists():
-                role = "teacher"
+            elif user.groups.filter(name="instructor").exists():
+                role = "instructor"
             else:
                 role = "student"
 
         # Custom Message Depending on Role
         if role == "admin":
             message = "Admin sign in successful"
-        elif role == "teacher":
-            message = "Teacher sign in successful"
+        elif role == "instructor":
+            message = "Instructor sign in successful"
         else:
             message = "Student sign in successful"
         return Response({
