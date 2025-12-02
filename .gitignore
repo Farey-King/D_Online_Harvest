@@ -9,3 +9,4 @@ __pycache__/
 *$py.class
 # Ignore environment variables file
 .env
+.DS_Store
