@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: d-online-harvest
+    runtime: python
+    buildCommand: pip install -r requirements.txt && cd D_online_harvest && python manage.py collectstatic --noinput && python manage.py migrate
+    startCommand: cd D_online_harvest && gunicorn D_online_harvest.wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.4
+      - key: DJANGO_SETTINGS_MODULE
+        value: D_online_harvest.settings
