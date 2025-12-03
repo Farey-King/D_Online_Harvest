@@ -101,7 +101,7 @@ ckzg==2.1.5
 cytoolz==1.1.0
 
 
- ETHEREUM / WEB3 DEPENDENCIES
+# ETHEREUM / WEB3 DEPENDENCIES
 
 
 # Ethereum account management (signing, key handling)
