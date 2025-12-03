@@ -175,11 +175,10 @@ pyunormalize==17.0.0
 
 
 ####################################
-# 🪟 WINDOWS SUPPORT
+# 🪟 WINDOWS SUPPORT (Uncomment on Windows only)
 ####################################
 
-# Required for some Windows system integrations
-pywin32==311
+# pywin32==311  # Required for some Windows system integrations (Windows only)
 
 
 ####################################
@@ -190,7 +189,7 @@ pywin32==311
 regex==2025.11.3
 
 # HTTP library for making web requests (used by many APIs)
-requests==2.32.5
+# requests==2.32.5  # Duplicate - already specified above as 2.31.0
 
 # Recursive-length prefix encoding (used in Ethereum transactions)
 rlp==4.1.0
