@@ -429,9 +429,14 @@ class Transaction(models.Model):
 
 class TransactionHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transaction_history")
+    order_id = models.CharField(max_length=255)
     date = models.DateTimeField(auto_now_add=True)
     course_name = models.CharField(max_length=255)
-    student = models.CharField(max_length=255)
+    student= models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="student_transaction_history"
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     transaction_id = models.CharField(max_length=255)
     status = models.CharField(max_length=50, choices=[
@@ -439,10 +444,11 @@ class TransactionHistory(models.Model):
         ('pending', 'Pending'),
         ('failed', 'Failed'),
     ])
+    commission = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
 
     def __str__(self):
-        return f"{self.user.email} - {self.course_name} - {self.amount} - {self.transaction_id} - {self.status}"
+        return f"{self.user.email} - {self.student.email} - {self.amount} - {self.transaction_id} - {self.status}"
     
 class PurchaseHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="purchase_history")

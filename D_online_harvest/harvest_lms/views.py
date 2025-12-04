@@ -21,7 +21,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
 from django.db.models import Q,Sum,Avg,Count
-from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
+from django.db.models.functions import TruncWeek, TruncMonth, TruncYear, TruncHour, TruncDay
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
@@ -30,6 +30,7 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import(
     AdvancedInformationSerializer,
     AssignmentSerializer,
+    CommissionTableSerializer,
     CompletedSerializer,
     CourseCurriculumSerializer,
     CoursePerformanceSerializer,
@@ -1315,9 +1316,9 @@ class AdminDashboardView(APIView):
 
         return Response(data, status=status.HTTP_200_OK)
 
-    # ---------------------------------------------
+
     # TOP STATISTICS
-    # ---------------------------------------------
+    
     def get_top_statistics(self, period):
         end = timezone.now()
 
@@ -1430,12 +1431,12 @@ class AdminDashboardView(APIView):
         return {
             "lifetime_courses_commission": float(lifetime_commission),
             "lifetime_received_commission": float(instructor_share),
-            "lifetime_pending_commission": float(lifetime_commission * 0.10),  # Example
+            "lifetime_pending_commission": float(lifetime_commission * 0.10),  
         }
 
-    # ---------------------------------------------
+    
     # USER GROWTH CHART
-    # ---------------------------------------------
+    
     def get_user_growth_chart(self, period):
         Course = apps.get_model("harvest_lms", "Course")
 
@@ -1483,9 +1484,9 @@ class AdminDashboardView(APIView):
 
         return data
 
-    # ---------------------------------------------
+
     # TOP PERFORMING COURSES
-    # ---------------------------------------------
+    
     def get_top_performing_courses(self):
         Course = apps.get_model("harvest_lms", "Course")
 
@@ -1664,7 +1665,7 @@ class AdminStatisticsDetailView(APIView):
             'distribution': rating_distribution
         }
 @extend_schema(
-    tags=["Admin Transaction History"],
+    tags=["Admin Transaction summary on revenue dashboard"],
     summary="Retrieve the logged-in user's transaction history"
 )
 class Transactionview(APIView):
@@ -1672,7 +1673,154 @@ class Transactionview(APIView):
 
     def get(self, request):
         user = request.user
-        transactions = Transaction.objects.filter(user=user).order_by('-date')
+        transactions = Transaction.objects.filter(customer=user).order_by('-date')
         serializer = TransactionSerializer(transactions, many=True)
         return Response(serializer.data)
 
+# revenue chart for admin dashboard
+from .utils import get_period_range
+
+
+@extend_schema(
+    tags=["Admin Revenue Chart"],
+    summary="Retrieve revenue chart data for the admin dashboard"
+)
+class RevenueChartView(APIView):
+    permission_classes = [IsAdminOrSuperuser]
+
+    def get(self, request):
+        period = request.query_params.get("period", "monthly")
+
+        start, end, prev_start, prev_end = get_period_range(period)
+
+        
+        # CARD 1: Total Profit
+        
+        total_credit = Transaction.objects.filter(
+            type="credit", date__range=[start, end]
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        total_debit = Transaction.objects.filter(
+            type="debit", date__range=[start, end]
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        total_profit = total_credit - total_debit
+
+        # Previous period for percentage calculation
+        prev_credit = Transaction.objects.filter(
+            type="credit", date__range=[prev_start, prev_end]
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        prev_debit = Transaction.objects.filter(
+            type="debit", date__range=[prev_start, prev_end]
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        prev_profit = prev_credit - prev_debit
+
+        def percent_change(current, previous):
+            if previous == 0:
+                return 100 if current > 0 else 0
+            return round(((current - previous) / previous) * 100, 2)
+
+        profit_percentage = percent_change(total_profit, prev_profit)
+
+        
+        # CARD 2: Last Transaction
+        
+        last_tx = Transaction.objects.order_by("date").first()
+        last_transaction_amount = last_tx.amount if last_tx else 0
+
+        
+        # CARD 3: Debit
+        
+        prev_debits = Transaction.objects.filter(
+            type="debit", date__range=[prev_start, prev_end]
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        debit_percentage = percent_change(total_debit, prev_debits)
+
+        
+        # CHART DATA
+        
+        if period == "daily":
+            truncate = TruncHour
+        elif period == "weekly":
+            truncate = TruncDay
+        elif period == "monthly":
+            truncate = TruncDay
+        elif period == "yearly":
+            truncate = TruncMonth
+
+        # Current period data
+        current = (
+            Transaction.objects.filter(date__range=[start, end])
+            .annotate(period=truncate("date"))
+            .values("period")
+            .annotate(total=Sum("amount"))
+            .order_by("period")
+        )
+
+        # Previous period data
+        previous = (
+            Transaction.objects.filter(date__range=[prev_start, prev_end])
+            .annotate(period=truncate("date"))
+            .values("period")
+            .annotate(total=Sum("amount"))
+            .order_by("period")
+        )
+
+        labels = [item["period"].strftime("%Y-%m-%d") for item in current]
+        current_values = [item["total"] for item in current]
+        previous_values = [item["total"] for item in previous]
+
+        
+        return Response({
+            "cards": [
+                {
+                    "label": "Total Profit",
+                    "value": total_profit,
+                    "percentage": profit_percentage,
+                },
+                {
+                    "label": "Last Transaction",
+                    "value": last_transaction_amount,
+                    "percentage": 0,
+                },
+                {
+                    "label": "Debit",
+                    "value": total_debit,
+                    "percentage": debit_percentage,
+                }
+            ],
+            "chart": {
+                "labels": labels,
+                "current": current_values,
+                "previous": previous_values,
+            }
+        })
+
+@extend_schema(
+    tags=["Course Commission View"],
+    summary="Retrieve course commission details for a specific course"
+)
+class CourseCommissionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        
+        commission = TransactionHistory.objects.all()
+        serializer = CommissionTableSerializer(commission, many=True)
+
+    # summary total
+        total_commission = commission.aggregate(total=Sum('commission'))['total'] or 0
+        received_commission = commission.filter(status='received').aggregate(total=Sum('commission'))['total'] or 0
+        pending_commission = commission.filter(status='pending').aggregate(total=Sum('commission'))['total'] or 0
+
+        return Response({
+            "comission_cards": {
+                "total_commission": total_commission,
+                "received_commission": received_commission,
+                "pending_commission": pending_commission
+            },
+            "transactions": serializer.data
+        })

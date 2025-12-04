@@ -5,7 +5,7 @@ from django.urls import include, path,re_path
 from  harvest_lms.views import (AdminDashboardView, AdminStatisticsDetailView, AdvancedInformationView,
                                 CompleteLessonView, 
                                 CompletedListView,
-                                ConfirmPasswordResetView, CourseCurriculumDeleteView, CourseCurriculumUpdateView,
+                                ConfirmPasswordResetView, CourseCommissionView, CourseCurriculumDeleteView, CourseCurriculumUpdateView,
                                 InstructorCourseCreateView,
                                 InstructorCourseDeleteView,
                                 InstructorCourseDetailView,
@@ -42,6 +42,7 @@ from  harvest_lms.views import (AdminDashboardView, AdminStatisticsDetailView, A
                     PublishCourseView,
                     EarningsDashboardView,
                     NotificationView,
+                    RevenueChartView,
                     )
 try:
     from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
@@ -123,7 +124,11 @@ urlpatterns = [
     path("panel/admin/notifications/", NotificationView.as_view(), name="admin-notifications"),
     # Detailed statistics endpoints
     path('panel/admin/statistics/<str:metric>/', AdminStatisticsDetailView.as_view(), name='admin-statistics-detail'),
-    path('transaction/', Transactionview.as_view(), name='transaction-view'),
+    path('panel/admin/commission-table/', CourseCommissionView.as_view(), name='admin-commission-table'),
+        # Revenue Chart Data endpoint  
+    path('panel/admin/revenue-chart/', RevenueChartView.as_view(), name='admin-revenue-chart'), 
+
+    path('panel/admin/transaction/', Transactionview.as_view(), name='transaction-view'),
     
 ]
 

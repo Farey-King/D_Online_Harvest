@@ -334,11 +334,14 @@ class InstructorEarningsSerializer(serializers.ModelSerializer):
     earnings = serializers.SerializerMethodField()
     views = serializers.SerializerMethodField()
     saved = serializers.SerializerMethodField()
+    enrolled_at = serializers.DateTimeField(format="%Y-%m-%d", read_only=True)
 
     class Meta:
         model = Course
-        fields = ['id', 'title', 'image', 'video', 'price', 'earnings', 'views', 'saved','duration_hours']
-
+        fields = ['id', 'title', 'image', 'video', 'price', 'earnings', 'views', 'saved','duration_hours','enrolled_at']
+    def get_enrolled_at(self, obj):
+        latest_enrollment = Enrollment.objects.filter(course=obj).order_by('-enrolled_at').first()
+        return latest_enrollment.enrolled_at if latest_enrollment else None
     def get_earnings(self, obj):
         # Calculate total earnings from enrollments
         return sum(enrollment.price for enrollment in obj.enrollments.all())
@@ -504,4 +507,12 @@ class TransactionSerializer(serializers.Serializer):
     class Meta:
         model = Transaction
         fields = '__all__'
+
+
+class CommissionTableSerializer(serializers.ModelSerializer):
+    customer = serializers.CharField(source='customer.get_full_name')
+    
+    class Meta:
+        model = Transaction
+        fields = ['order_id', 'customer', 'type', 'date', 'status', 'commission']
 
