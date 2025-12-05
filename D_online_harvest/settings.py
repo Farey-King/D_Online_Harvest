@@ -26,18 +26,13 @@ env = environ.Env(
 # Read from the .env file located at your project root (if it exists)
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-DEBUG = env('DEBUG')
-SECRET_KEY = env('SECRET_KEY')
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = env("SECRET_KEY", default='django-insecure-(aefx-qt*jnn9l(9f^%6uh3@cry_$vxjp1ow3+er*(#h^0&v81')
 
-# ALLOWED_HOSTS - hardcode the Render domain to ensure it's always included
-ALLOWED_HOSTS = [
-    'd-online-harvest.onrender.com',
-    '.onrender.com',
-    'localhost',
-    '127.0.0.1',
-]
-# Add any additional hosts from environment variable
-ALLOWED_HOSTS += env('ALLOWED_HOSTS')
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = True
+
+ALLOWED_HOSTS = ["*"] if DEBUG else ["*"]
 
 DATABASES = {
     'default': {
