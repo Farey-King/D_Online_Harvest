@@ -15,7 +15,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.apps import apps
 from rest_framework.response import Response
-from rest_framework import status,permissions,generics
+from rest_framework import status, permissions, generics, serializers
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.pagination import PageNumberPagination
@@ -391,14 +391,25 @@ class StudentDashboardView(APIView):
             "upcoming_tasks": upcoming_tasks
         })
     
+class CompleteLessonResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    progress = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    status = serializers.CharField(required=False)
+
+
 @extend_schema(
     tags=["Lessons"],
     summary="Mark a lesson as completed",
     description="Marks a lesson as completed, updates progress percentage, and sets course status to 'in-progress' or 'completed'.",
-    responses={200: None, 403: None, 404: None}
+    responses={
+        200: CompleteLessonResponseSerializer,
+        403: CompleteLessonResponseSerializer,
+        404: CompleteLessonResponseSerializer
+    }
 )
 class CompleteLessonView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = CompleteLessonResponseSerializer
 
     def post(self, request, lesson_id):
         user = request.user
@@ -445,8 +456,7 @@ class CompleteLessonView(APIView):
 @extend_schema(
     tags=["Courses"],
     summary="List all available courses",
-    responses={200: CourseSerializer(many=True)},
-    operation_id="list_courses"
+    responses={200: CourseSerializer(many=True)}
 )
 class CourseListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -454,13 +464,24 @@ class CourseListView(APIView):
     def get(self, request):
         courses = Course.objects.all()
         return Response(CourseSerializer(courses, many=True).data)
+
+
+class EnrollInCourseResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+
 @extend_schema(
     tags=["Courses"],
     summary="Enroll in a course",
-    responses={200: None, 400: None, 404: None}
+    responses={
+        200: EnrollInCourseResponseSerializer,
+        400: EnrollInCourseResponseSerializer,
+        404: EnrollInCourseResponseSerializer
+    }
 )
 class EnrollInCourseView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = EnrollInCourseResponseSerializer
 
     def post(self, request, course_id):
         user = request.user
@@ -509,8 +530,7 @@ class EnrollInCourseView(APIView):
 @extend_schema(
     tags=["Courses"],
     summary="Retrieve course details",
-    responses={200: CourseSerializer, 404: None},
-    operation_id="retrieve_course_detail"
+    responses={200: CourseSerializer, 404: None}
 )
 class CourseDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -866,14 +886,22 @@ class NotificationListView(APIView):
         return Response(list(notifications))    
     
 
+class MarkNotificationAsReadResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
 @extend_schema(
     tags=["Instructor Notifications"],
     summary="Mark a notification as read",
-    responses={200: None, 404: None}
+    responses={
+        200: MarkNotificationAsReadResponseSerializer,
+        404: MarkNotificationAsReadResponseSerializer
+    }
 )
 # Mark notification as read
 class MarkNotificationAsReadView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = MarkNotificationAsReadResponseSerializer
 
     def post(self, request, pk):
         try:
@@ -978,8 +1006,7 @@ class InstructorCourseDeleteView(DestroyAPIView):
 
 @extend_schema(
     tags=["Conversations and Messaging"],
-    responses={200: ConversationListSerializer(many=True)},
-    operation_id="list_conversations"
+    responses={200: ConversationListSerializer(many=True)}
 )
 # List all conversations (chat list)
 class ConversationListView(APIView):
@@ -992,8 +1019,7 @@ class ConversationListView(APIView):
 
 @extend_schema(
     tags=["Conversations and Messaging"],
-    responses={200: ConversationDetailSerializer},
-    operation_id="retrieve_conversation_detail"
+    responses={200: ConversationDetailSerializer}
 )
 # Fetch conversation thread
 class ConversationDetailView(APIView):
@@ -1053,13 +1079,18 @@ class DeleteConversationView(APIView):
         convo.delete()
         return Response({"detail": "Conversation deleted"})
 
+class BlockConversationResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
 @extend_schema(
     tags=["Conversations and Messaging"],
-    responses={200: None}
+    responses={200: BlockConversationResponseSerializer}
 )
 # Block user
 class BlockConversationView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = BlockConversationResponseSerializer
 
     def post(self, request, convo_id):
         convo = get_object_or_404(Conversation, id=convo_id, instructor=request.user)

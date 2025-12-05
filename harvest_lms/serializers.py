@@ -212,7 +212,7 @@ class UpcomingTaskSerializer(serializers.ModelSerializer):
 class LessonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lesson
-        fields = ["id", "title", "content", "video_url", "order", "duration_minutes"]
+        fields = ["id", "title", "duration", "video_url", "order", "duration_minutes"]
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -338,13 +338,16 @@ class InstructorEarningsSerializer(serializers.ModelSerializer):
         model = Course
         fields = ['id', 'title', 'image', 'video', 'price', 'earnings', 'views', 'saved','duration_hours']
 
+    @extend_schema_field(serializers.DecimalField(max_digits=10, decimal_places=2))
     def get_earnings(self, obj):
         # Calculate total earnings from enrollments
         return sum(enrollment.price for enrollment in obj.enrollments.all())
 
+    @extend_schema_field(serializers.IntegerField())
     def get_views(self, obj):
         return obj.views.count()
 
+    @extend_schema_field(serializers.IntegerField())
     def get_saved(self, obj):
         return obj.saves.count()
 
@@ -389,10 +392,12 @@ class ConversationListSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = ["id", "student_name", "last_message", "unread_messages"]
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_last_message(self, obj):
         last = obj.messages.last()
         return last.content if last else None
 
+    @extend_schema_field(serializers.IntegerField())
     def get_unread_messages(self, obj):
         return obj.messages.filter(is_read=False).count()
 
