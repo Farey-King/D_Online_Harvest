@@ -26,10 +26,12 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Initialize environment variables
-env = environ.Env()
+env = environ.Env(
+    DEBUG=(bool, False)
+)
 DEBUG = env('DEBUG')
 SECRET_KEY = env('SECRET_KEY')
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*']) + ['d-online-harvest.onrender.com']
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[]) + ['d-online-harvest.onrender.com', 'localhost', '127.0.0.1']
 
 DATABASES = {
     'default': {
