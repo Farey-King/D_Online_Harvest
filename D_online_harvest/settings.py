@@ -14,24 +14,30 @@ from pathlib import Path
 import os   
 import environ
 
-# This points to the root of your Django project (where manage.py lives)
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-env = environ.Env()
-# Set the project base directory
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))      
+# Initialize environment variables with defaults
+env = environ.Env(
+    DEBUG=(bool, False),
+    ALLOWED_HOSTS=(list, []),
+)
 
-
-# Read from the .env file located at your project root
+# Read from the .env file located at your project root (if it exists)
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-# Initialize environment variables
-env = environ.Env(
-    DEBUG=(bool, False)
-)
 DEBUG = env('DEBUG')
 SECRET_KEY = env('SECRET_KEY')
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[]) + ['d-online-harvest.onrender.com', 'localhost', '127.0.0.1']
+
+# ALLOWED_HOSTS - hardcode the Render domain to ensure it's always included
+ALLOWED_HOSTS = [
+    'd-online-harvest.onrender.com',
+    '.onrender.com',
+    'localhost',
+    '127.0.0.1',
+]
+# Add any additional hosts from environment variable
+ALLOWED_HOSTS += env('ALLOWED_HOSTS')
 
 DATABASES = {
     'default': {
@@ -53,9 +59,6 @@ EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").strip().lower() in {"1", "tru
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@fastest.exchange")
 # Email timeout settings
 EMAIL_TIMEOUT = 30
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Quick-start development settings - unsuitable for production
