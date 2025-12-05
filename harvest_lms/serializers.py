@@ -1,5 +1,3 @@
-from symtable import Class
-from tkinter import Message
 from rest_framework import serializers  # type: ignore
 from django.contrib.auth import get_user_model
 from .models import (
