@@ -345,7 +345,8 @@ class UserLookupView(APIView):
 
 @extend_schema(
     tags=["Student Dashboard"],
-    summary="Retrieve the logged-in student's dashboard data"
+    summary="Retrieve the logged-in student's dashboard data",
+    responses={200: StudentDashboardSerializer}
 )
 class StudentDashboardView(APIView):
     permission_classes = [IsAuthenticated]
@@ -393,7 +394,8 @@ class StudentDashboardView(APIView):
 @extend_schema(
     tags=["Lessons"],
     summary="Mark a lesson as completed",
-    description="Marks a lesson as completed, updates progress percentage, and sets course status to 'in-progress' or 'completed'."
+    description="Marks a lesson as completed, updates progress percentage, and sets course status to 'in-progress' or 'completed'.",
+    responses={200: None, 403: None, 404: None}
 )
 class CompleteLessonView(APIView):
     permission_classes = [IsAuthenticated]
@@ -442,7 +444,9 @@ class CompleteLessonView(APIView):
 
 @extend_schema(
     tags=["Courses"],
-    summary="List all available courses"       
+    summary="List all available courses",
+    responses={200: CourseSerializer(many=True)},
+    operation_id="list_courses"
 )
 class CourseListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -452,7 +456,8 @@ class CourseListView(APIView):
         return Response(CourseSerializer(courses, many=True).data)
 @extend_schema(
     tags=["Courses"],
-    summary="Enroll in a course"
+    summary="Enroll in a course",
+    responses={200: None, 400: None, 404: None}
 )
 class EnrollInCourseView(APIView):
     permission_classes = [IsAuthenticated]
@@ -503,7 +508,9 @@ class EnrollInCourseView(APIView):
     
 @extend_schema(
     tags=["Courses"],
-    summary="Retrieve course details"
+    summary="Retrieve course details",
+    responses={200: CourseSerializer, 404: None},
+    operation_id="retrieve_course_detail"
 )
 class CourseDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -572,7 +579,8 @@ class CompletedListView(generics.ListAPIView):
 
 @extend_schema(
     tags=["Completed Dashboard"],
-    summary="Retrieve the logged-in student's completed dashboard data"
+    summary="Retrieve the logged-in student's completed dashboard data",
+    responses={200: CompletedSerializer(many=True)}
 )
 class StudentCompletedDashboardView(APIView):
     permission_classes = [IsAuthenticated]
@@ -624,7 +632,8 @@ class StudentCompletedDashboardView(APIView):
     
 @extend_schema(
     tags=["Overdue Dashboard"], 
-    summary="Retrieve the logged-in student's overdue dashboard data"
+    summary="Retrieve the logged-in student's overdue dashboard data",
+    responses={200: OverdueSerializer(many=True)}
 )
 class StudentOverdueDashboardView(APIView):
     permission_classes = [IsAuthenticated]
@@ -645,7 +654,8 @@ class StudentOverdueDashboardView(APIView):
 
 @extend_schema(
     tags=["Upcoming Events"],
-    summary="List upcoming events"
+    summary="List upcoming events",
+    responses={200: UpcomingEventSerializer(many=True)}
 )
 class UpcomingEventListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -687,7 +697,8 @@ class UpcomingEventListView(APIView):
 # Teacher Dashboard Cards
 @extend_schema(
     tags=["Instructor Dashboard"],
-    summary="Retrieve the logged-in instructor's dashboard card metrics"
+    summary="Retrieve the logged-in instructor's dashboard card metrics",
+    responses={200: None}
 )
 class InstructorDashboardCardsView(APIView):
     """
@@ -772,7 +783,8 @@ class InstructorDashboardCardsView(APIView):
 # Course performance view graphs and stats
 @extend_schema(
     tags=["Instructor Dashboard"],
-    summary="Retrieve course performance metrics for the logged-in instructor"
+    summary="Retrieve course performance metrics for the logged-in instructor",
+    responses={200: CoursePerformanceSerializer(many=True)}
 )
 class InstructorCoursePerformanceView(APIView):
     permission_classes = [IsAuthenticated]
@@ -823,6 +835,7 @@ class InstructorCoursePerformanceView(APIView):
         return Response(serializer.data)
 @extend_schema(
     tags=["Instructor Tasks"],
+    responses={200: UpcomingTaskSerializer(many=True)}
 )
 class UpcomingTasksView(APIView):
     permission_classes = [IsAuthenticated]
@@ -842,6 +855,7 @@ class UpcomingTasksView(APIView):
 
 @extend_schema(
     tags=["Instructor Notifications"],
+    responses={200: NotificationSerializer(many=True)}
 )
 class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -854,7 +868,8 @@ class NotificationListView(APIView):
 
 @extend_schema(
     tags=["Instructor Notifications"],
-    summary="Mark a notification as read"
+    summary="Mark a notification as read",
+    responses={200: None, 404: None}
 )
 # Mark notification as read
 class MarkNotificationAsReadView(APIView):
@@ -895,6 +910,7 @@ class NotificationView(APIView):
 
 @extend_schema(
     tags=["Instructor Earnings"],
+    responses={200: InstructorEarningsSerializer(many=True)}
 )
 class InstructorEarningsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -950,16 +966,20 @@ class InstructorCourseEditView(UpdateAPIView):
 
 @extend_schema(
     tags=["Instructor Courses"],
+    responses={204: None}
 )
 # DELETE Course
 class InstructorCourseDeleteView(DestroyAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = InstructorCourseSerializer
 
     def get_queryset(self):
         return Course.objects.filter(author=self.request.user) 
 
 @extend_schema(
     tags=["Conversations and Messaging"],
+    responses={200: ConversationListSerializer(many=True)},
+    operation_id="list_conversations"
 )
 # List all conversations (chat list)
 class ConversationListView(APIView):
@@ -972,6 +992,8 @@ class ConversationListView(APIView):
 
 @extend_schema(
     tags=["Conversations and Messaging"],
+    responses={200: ConversationDetailSerializer},
+    operation_id="retrieve_conversation_detail"
 )
 # Fetch conversation thread
 class ConversationDetailView(APIView):
@@ -1020,6 +1042,7 @@ class StartConversationView(APIView):
 
 @extend_schema(
     tags=["Conversations and Messaging"],
+    responses={200: None}
 )   
 # Delete conversation
 class DeleteConversationView(APIView):
@@ -1032,6 +1055,7 @@ class DeleteConversationView(APIView):
 
 @extend_schema(
     tags=["Conversations and Messaging"],
+    responses={200: None}
 )
 # Block user
 class BlockConversationView(APIView):
@@ -1137,6 +1161,7 @@ class CourseCurriculumUpdateView(APIView):
 
 @extend_schema(
     tags=["Course Curriculum"],
+    responses={200: None, 404: None}
 )
 class CourseCurriculumDeleteView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1170,7 +1195,8 @@ class PublishCourseView(APIView):
         })
 @extend_schema(
     tags=["Instructor Earnings Dashboard"],
-    summary="Retrieve the logged-in instructor's earnings dashboard data"
+    summary="Retrieve the logged-in instructor's earnings dashboard data",
+    responses={200: EarningsDashboardSerializer}
 )
 class EarningsDashboardView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1250,8 +1276,8 @@ class EarningsDashboardView(APIView):
 # Instructor Transaction Summary Table
 @extend_schema(
     tags=["Instructor Earnings Dashboard"],
-    summary="Retrieve transaction summary for the logged-in instructor"
-
+    summary="Retrieve transaction summary for the logged-in instructor",
+    responses={200: TransactionHistorySerializer(many=True)}
 )
 
 class TransactionHistoryView(APIView):
@@ -1289,7 +1315,8 @@ class TransactionHistoryView(APIView):
  # Purchase History View   
 @extend_schema(
     tags=["Purchase History"],
-    summary="Retrieve the logged-in user's purchase history"
+    summary="Retrieve the logged-in user's purchase history",
+    responses={200: PurchaseHistorySerializer(many=True)}
 )
 class PurchaseHistoryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1300,6 +1327,11 @@ class PurchaseHistoryView(APIView):
         serializer = PurchaseHistorySerializer(purchases, many=True)
         return Response(serializer.data)
 
+@extend_schema(
+    tags=["Admin Dashboard"],
+    summary="Retrieve the admin dashboard data",
+    responses={200: AdminDashboardSerializer}
+)
 class AdminDashboardView(APIView):
     permission_classes = [IsAdminOrSuperuser]
 
@@ -1527,6 +1559,11 @@ class AdminDashboardView(APIView):
         return round(((current - previous) / previous) * 100, 2)
 
 
+@extend_schema(
+    tags=["Admin Dashboard"],
+    summary="Retrieve detailed statistics for a specific metric",
+    responses={200: None}
+)
 class AdminStatisticsDetailView(APIView):
     """
     Detailed statistics for individual metrics
@@ -1665,7 +1702,8 @@ class AdminStatisticsDetailView(APIView):
         }
 @extend_schema(
     tags=["Admin Transaction History"],
-    summary="Retrieve the logged-in user's transaction history"
+    summary="Retrieve the logged-in user's transaction history",
+    responses={200: TransactionSerializer(many=True)}
 )
 class Transactionview(APIView):
     permission_classes = [IsAuthenticated]

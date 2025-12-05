@@ -1,5 +1,6 @@
 from rest_framework import serializers  # type: ignore
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field
 from .models import (
     AdvancedInformation,
     Completed,
@@ -362,11 +363,13 @@ class InstructorCourseCardSerializer(serializers.ModelSerializer):
         model = Course
         fields = "__all__"
 
-    def get_rating(self, obj):
+    @extend_schema_field(serializers.FloatField())
+    def get_rating(self, obj) -> float:
         # until reviews are implemented
         return 4.9
 
-    def get_students_count(self, obj):
+    @extend_schema_field(serializers.IntegerField())
+    def get_students_count(self, obj) -> int:
         return obj.enrollments.count()
 
 class MessageSerializer(serializers.ModelSerializer):
