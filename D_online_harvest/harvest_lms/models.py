@@ -3,6 +3,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
 import uuid
+from D_online_harvest import settings
+
 
 class UserManager(BaseUserManager):
     def create_user(self, full_name, email, phone_number, password=None):
@@ -69,6 +71,18 @@ class SessionLog(models.Model):
     def __str__(self):
         return f"{self.user.email} - {self.login_time}"
 
+class VerificationCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    code = models.CharField(max_length=36)
+    code_type = models.CharField(max_length=10, choices=[('email', 'Email'), ('sms', 'SMS')])
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
 class PasswordResetOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     otp = models.CharField(max_length=6)
@@ -109,8 +123,8 @@ class Profile(models.Model):
 
 class Enrollment(models.Model):
     STATUS_CHOICES = (
-        ('active', 'Active'),
-        ('in-progress', 'In Progress'),
+        ('start', 'Start'),
+        ('resume', 'Resume'),
         ('completed', 'Completed'),
     )
     CATEGORY_CHOICES = (
@@ -389,6 +403,7 @@ class BasicInformation(models.Model):
     course_level = models.CharField(max_length=50, choices=COURSE_LEVEL_CHOICES, default='beginner')
     duration = models.CharField(max_length=50, choices=DURATION_CHOICES, default='short')
     status = models.CharField(max_length=50, choices=[('draft', 'Draft'), ('published', 'Published')], default='draft')
+    created_at = models.DateTimeField(auto_now_add=True)
 
 class AdvancedInformation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="instructor_advanced")
@@ -424,14 +439,14 @@ class Transaction(models.Model):
         ('credit', 'Credit'),
         ('debit', 'Debit'),
     ])
-    amount = models.DecimalField(max_digits=10, decimal_places=2)  
+    amount = models.FloatField()  
 
 
 class TransactionHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transaction_history")
     order_id = models.CharField(max_length=255)
     date = models.DateTimeField(auto_now_add=True)
-    course_name = models.CharField(max_length=255)
+    course_name = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True)
     student= models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -444,12 +459,54 @@ class TransactionHistory(models.Model):
         ('pending', 'Pending'),
         ('failed', 'Failed'),
     ])
-    commission = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-
+    payment_address = models.CharField(max_length=128)
+    amount_usd = models.FloatField()
+    amount_crypto = models.FloatField(
+    null=True, blank=True)
+    token = models.CharField(max_length=32, default='USDT')
+    network = models.CharField(max_length=32, default='BSC')
+    tx_hash = models.CharField(max_length=128, null=True, blank=True)
+    confirmations = models.IntegerField(default=0)
+    commission = models.FloatField(default=0.00)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.user.email} - {self.student.email} - {self.amount} - {self.transaction_id} - {self.status}"
     
+    
+class ShopingCart(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="shopping_cart")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.course.title}"
+
+class Checkout(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+    )
+    order_id = models.UUIDField(unique=True,null=True, blank=True, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="checkout")
+    course = models.ManyToManyField(Course)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reciever_address = models.CharField(max_length=128)
+    # encrypted_private_key = models.CharField(max_length=256)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_method = models.CharField(max_length=50, choices=[
+        ('credit_card', 'Credit Card'),
+        ('paypal', 'PayPal'),
+        ('crypto', 'Cryptocurrency'),
+    ]
+    , default='crypto'
+    )
+    
+    checkout_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.course.title} - {self.total_amount}" 
 class PurchaseHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="purchase_history")
     image = models.URLField(blank=True, null=True)
@@ -467,7 +524,7 @@ class AdminDashboard(models.Model):
     admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="admin_dashboard")
     total_users = models.PositiveIntegerField(default=0)
     total_courses = models.PositiveIntegerField(default=0)
-    total_revenue = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    total_revenue = models.FloatField(default=0.00)
     total_enrollments = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -477,9 +534,38 @@ class AdminDashboard(models.Model):
 class AdminStatisticsDetail(models.Model):
     admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="admin_statistics")
     metric = models.CharField(max_length=100)
-    value = models.DecimalField(max_digits=15, decimal_places=2)
+    value = models.FloatField()
     recorded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.metric} - {self.value} at {self.recorded_at}"
+class AdminActivityLog(models.Model):
+    EVENT_TYPES = (
+        ('signin', 'Signin'),
+        ('signout', 'Signout'),
+        ('enrollment', 'Enrollment'),
+        ('course_creation', 'Course Creation'),
+        ('course_deletion', 'Course Deletion'),
+        ('user_management', 'User Management'),
+    )
     
+    user = models.ForeignKey(User, on_delete=models.CASCADE,null=True, blank=True, related_name="admin_activities")
+    # id = models.IntegerField(primary_key=True)
+    user_role = models.CharField(max_length=20, choices=User.ROLE_CHOICES,null=True, blank=True)
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
+    action = models.CharField(max_length=255)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.action} at {self.created_at}" 
+
+class SystemReport(models.Model):
+    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="system_reports")
+    report_data = models.JSONField()
+    description = models.TextField()
+    generated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="generated_reports")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.report_type} - {self.created_at}"

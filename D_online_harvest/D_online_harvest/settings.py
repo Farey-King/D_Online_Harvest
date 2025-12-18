@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os   
+from django.conf import settings
 import environ
+import paypalrestsdk # type: ignore
 
 # This points to the root of your Django project (where manage.py lives)
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,6 +23,7 @@ env = environ.Env()
 # Set the project base directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))      
 
+PASSWORD_RESET_TOKEN_EXPIRY_MINUTES = int(os.environ.get("PASSWORD_RESET_TOKEN_EXPIRY_MINUTES", "30"))
 
 # Read from the .env file located at your project root
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
@@ -51,6 +54,20 @@ EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").strip().lower() in {"1", "tru
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@fastest.exchange")
 # Email timeout settings
 EMAIL_TIMEOUT = 30
+
+import os
+
+BSC_RPC = os.getenv("BSC_RPC", "https://data-seed-prebsc-1-s1.binance.org:8545/")
+USDT_CONTRACT = os.getenv("USDT_CONTRACT", "0x7ef95a0Fea91a325d4D49a18b106a150f31636b9")
+CHAIN_CONFIRMATIONS_REQUIRED = int(os.getenv("CHAIN_CONFIRMATIONS_REQUIRED", 3))
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "bAsUBUq_oGjRAAPgtUMPfUEGq11ckN7TshkY9Jk9l9c=")
+
+# paypalrestsdk.configure({
+#     "mode": settings.PAYPAL_MODE,
+#     "client_id": settings.PAYPAL_CLIENT_ID,
+#     "client_secret": settings.PAYPAL_CLIENT_SECRET,
+# })
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

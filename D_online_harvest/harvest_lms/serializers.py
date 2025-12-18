@@ -1,15 +1,20 @@
 from symtable import Class
+from django.utils import timezone
 from tkinter import Message
 from rest_framework import serializers  # type: ignore
 from django.contrib.auth import get_user_model
 from .models import (
     AdvancedInformation,
+    Checkout,
+    ShopingCart,
     Completed,
     Conversation,
     Course,
     Notification,
     Overdue,
     PasswordResetOTP,
+    VerificationCode,
+    
     UpcomingEvent,
     Assignment,
     UpcomingTask,
@@ -25,7 +30,9 @@ from .models import (
     PublishCourse,
     TransactionHistory,
     PurchaseHistory,
-    Transaction
+    Transaction,
+    AdminActivityLog,
+    SystemReport
 
 )
 from django.core.validators import validate_email
@@ -84,6 +91,12 @@ class SessionLogSerializer(serializers.ModelSerializer):
         model = SessionLog
         fields = ['user', 'ip_address', 'user_agent', 'login_time', 'logout_time']
 
+class VerificationCodeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6)
+    class Meta:
+        model = VerificationCode
+
 class RequestPasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -101,28 +114,40 @@ class RequestPasswordResetSerializer(serializers.Serializer):
         user.email_user("Password Reset Code", f"Your OTP is: {otp}")
         return otp
 
-
 class ConfirmPasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    otp = serializers.CharField()
-    new_password = serializers.CharField()
+    otp = serializers.CharField(max_length=6)
+    new_password = serializers.CharField(min_length=7)
 
     def validate(self, data):
         try:
             user = User.objects.get(email=data["email"])
-            otp_record = PasswordResetOTP.objects.filter(user=user, otp=data["otp"]).last()
         except User.DoesNotExist:
             raise serializers.ValidationError({"email": "Invalid email"})
 
-        if not otp_record or not otp_record.is_valid():
+        verification_code = VerificationCode.objects.filter(
+            user=user,
+            code=data["otp"],            
+            code_type="password",
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).first()
+
+        if not verification_code:
             raise serializers.ValidationError({"otp": "Invalid or expired OTP"})
 
+        self.user = user
+        self.verification_code = verification_code
         return data
 
     def save(self):
-        user = User.objects.get(email=self.validated_data["email"])
-        user.set_password(self.validated_data["new_password"])
-        user.save()
+        self.user.set_password(self.validated_data["new_password"])
+        self.user.save()
+
+        self.verification_code.is_used = True
+        self.verification_code.save()
+
+        return self.user
 
 class ProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="user.full_name", required=False)
@@ -508,7 +533,15 @@ class TransactionSerializer(serializers.Serializer):
         model = Transaction
         fields = '__all__'
 
-
+class ShoppingCartSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShopingCart
+        fields = '__all__'
+        # extra_kwargs = {'course': {'read_only': True}}
+class CheckoutSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Checkout
+        fields = '__all__'
 class CommissionTableSerializer(serializers.ModelSerializer):
     customer = serializers.CharField(source='customer.get_full_name')
     
@@ -516,3 +549,17 @@ class CommissionTableSerializer(serializers.ModelSerializer):
         model = Transaction
         fields = ['order_id', 'customer', 'type', 'date', 'status', 'commission']
 
+class AdminActivityLogSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(source='user.get_full_name')
+    
+    class Meta:
+        model = AdminActivityLog
+        fields = '__all__'
+
+
+class SystemReportSerializer(serializers.ModelSerializer):
+    generated_by = serializers.CharField(source='generated_by.get_full_name')
+
+    class Meta:
+        model = SystemReport
+        fields = ['generated_by', 'report_type', 'description', 'created_at']

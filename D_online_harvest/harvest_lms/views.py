@@ -1,6 +1,8 @@
 import email
+import paypalrestsdk #type: ignore 
 from datetime import timedelta
-from drf_spectacular.utils import (
+import random
+from drf_spectacular.utils import ( # type: ignore
     extend_schema,
     OpenApiParameter,
     OpenApiTypes
@@ -14,20 +16,22 @@ from django.core.mail import send_mail
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.apps import apps
-from rest_framework.response import Response
-from rest_framework import status,permissions,generics
-from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
+from rest_framework.response import Response # type: ignore
+from rest_framework import status,permissions,generics# type: ignore
+from rest_framework.views import APIView # type: ignore
+from rest_framework.parsers import MultiPartParser, FormParser # type: ignore
+from rest_framework.pagination import PageNumberPagination # type: ignore
+from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView # type: ignore
 from django.db.models import Q,Sum,Avg,Count
 from django.db.models.functions import TruncWeek, TruncMonth, TruncYear, TruncHour, TruncDay
 from django.contrib.auth import authenticate
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken # type: ignore
+from rest_framework.permissions import IsAuthenticated # type: ignore
+from harvest_lms.payments.services.wallet_services import WalletService 
 
 
 from .serializers import(
+    AdminActivityLogSerializer,
     AdvancedInformationSerializer,
     AssignmentSerializer,
     CommissionTableSerializer,
@@ -50,6 +54,7 @@ from .serializers import(
     StudentDashboardSerializer,
     ContinueWatchingSerializer,
     CoursesListSerializer,
+    SystemReportSerializer,
     TransactionHistorySerializer,
     TransactionSerializer,
     UpcomingEventSerializer,
@@ -63,9 +68,14 @@ from .serializers import(
     EarningsDashboardSerializer,
     PurchaseHistorySerializer,
     AdminDashboardSerializer,
+    ShoppingCartSerializer,
+    CheckoutSerializer,
+    VerificationCodeSerializer,
+   
 )
 
 from .models import( 
+    AdminActivityLog,
     Assignment,
     Completed,
     Conversation,
@@ -79,6 +89,7 @@ from .models import(
     Refund,
     SessionLog, 
     Signin,
+    SystemReport,
     Transaction,
     UpcomingEvent,
     UpcomingTask,
@@ -91,11 +102,19 @@ from .models import(
     BasicInformation,
     AdvancedInformation,
     TransactionHistory,
-    PurchaseHistory
+    PurchaseHistory,
+    ShopingCart,
+    Checkout,
+    VerificationCode,
+
+    
+    
     
 )
 from harvest_lms import models
- 
+
+
+PASSWORD_RESET_EXPIRY_MINUTES = getattr(settings, "PASSWORD_RESET_TOKEN_EXPIRY_MINUTES", 30)
 
 @extend_schema(
     request=SignupSerializer,
@@ -215,26 +234,76 @@ class SignoutView(APIView):
     description="Request a password reset by sending an OTP to the user's email."
 )
 class RequestPasswordResetView(APIView):
+    permission_classes = [permissions.AllowAny]
+    serializer_class = RequestPasswordResetSerializer
     def post(self, request):
-        serializer = RequestPasswordResetSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "OTP sent to your email"})
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
+        email = serializer.validated_data['email']
+        user = User.objects.get(email=email)
+        otp = f"{random.randint(0, 999999):06d}"
+        expires_at = timezone.now() + timedelta(minutes=PASSWORD_RESET_EXPIRY_MINUTES)
+
+        
+        VerificationCode.objects.filter(
+            user=user,
+            code_type='password',
+            is_used=False,
+        ).update(is_used=True)
+
+        VerificationCode.objects.create(
+            user=user,
+            code=otp,
+            code_type='password',
+            expires_at=expires_at,
+        )
+        send_mail(  
+            subject="Password Reset OTP",
+            message=f"Your OTP for password reset is: {otp}. It expires in {PASSWORD_RESET_EXPIRY_MINUTES} minutes.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        return Response({"message": "OTP sent to email"}, status=status.HTTP_200_OK)
+    
 @extend_schema(
     request=ConfirmPasswordResetSerializer,
     responses={200: None},
     description="Confirm password reset using OTP and set a new password."
 )
 class ConfirmPasswordResetView(APIView):
-    def post(self, request):
-        serializer = ConfirmPasswordResetSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Password reset successful"})
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    permission_classes = [permissions.AllowAny]
+    serializer_class = ConfirmPasswordResetSerializer
 
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+        new_password = serializer.validated_data['new_password']
+
+        user = User.objects.get(email=email)
+
+        verification_code = VerificationCode.objects.filter(
+            user=user,
+            code=otp,
+            code_type='password',
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).first()
+
+        if not verification_code:
+            return Response({"detail": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save()
+
+        verification_code.is_used = True
+        verification_code.save()
+
+        return Response({"message": "Password reset successful"}, status=status.HTTP_200_OK)
 from .permissions import IsAdmin
 
 class CreateCourseView(APIView):
@@ -274,7 +343,7 @@ class EnrollCourseView(APIView):
     permission_classes = [IsStudent]
 
     def post(self, request):
-        ...
+        
         return Response({"message": "Enrolled in course successfully"})
     
 @extend_schema(
@@ -1824,3 +1893,229 @@ class CourseCommissionView(APIView):
             },
             "transactions": serializer.data
         })
+
+@extend_schema(
+    tags=["System Reports"],
+    summary="Retrieve system report logs for admin users"
+)
+class SystemReportView(APIView):
+    permission_classes = [IsAdminOrSuperuser]
+
+    def get(self, request):
+        reports = SystemReport.objects.all()
+        serializer = SystemReportSerializer(reports, many=True)
+        return Response(serializer.data)
+    
+@extend_schema(
+    tags=["System Reports"],
+    summary="Generates a new system report"
+)
+class CreateSystemReportView(APIView):
+    permission_classes = [IsAdminOrSuperuser]
+
+    def post(self, request):
+        description = request.data.get('description')
+        data = {
+            'total_users': User.objects.count(),
+            'total_courses': Course.objects.count(),
+            'total_revenue': Transaction.objects.aggregate(total=Sum('amount'))['total'] or 0,
+            'total_enrollments': Enrollment.objects.count(),
+        }
+        report = SystemReport.objects.create(
+            report_type='system_summary',
+            description=description,
+            report_data=data,
+            generated_by=request.user
+        )
+       
+        return Response(SystemReportSerializer(report).data, status=status.HTTP_201_CREATED)
+    
+
+@extend_schema(
+    tags=["Admin Activity Logs"],
+    summary="Retrieve activity logs for users"
+)
+class AdminActivityLogView(APIView):
+    permission_classes = [IsAdminOrSuperuser]
+
+    def get(self, request):
+        logs = AdminActivityLog.objects.all().order_by('-created_at')
+        serializer = AdminActivityLogSerializer(logs, many=True)
+        return Response(serializer.data) 
+    
+@extend_schema(
+    tags=["Shopping Cart"],
+    summary="Manage the user's shopping cart"
+)    
+class ShoppingCartView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        cart_items = ShopingCart.objects.filter(user=user)
+        serializer = ShoppingCartSerializer(cart_items, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        user = request.user
+        course_id = request.data.get('course_id')
+
+        if ShopingCart.objects.filter(user=user, course_id=course_id).exists():
+            return Response({"error": "Course already in cart"}, status=400)
+
+        cart_item = ShopingCart.objects.create(user=user, course_id=course_id)
+        serializer = ShoppingCartSerializer(cart_item)
+        return Response(serializer.data, status=201)
+
+    def delete(self, request, item_id):
+        user = request.user
+        try:
+            cart_item = ShopingCart.objects.get(id=item_id, user=user)
+            cart_item.delete()
+            return Response({"message": "Item removed from cart"}, status=200)
+        except ShopingCart.DoesNotExist:
+            return Response({"error": "Item not found in cart"}, status=404)
+        
+@extend_schema(
+    tags=["Checkout"],
+    summary="Process checkout for the shopping cart"
+)          
+class CheckoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        # Fetch cart items
+        items = ShopingCart.objects.filter(user=user)
+        if not items.exists():
+            return Response({"error": "Cart is empty"}, status=400)
+
+        # Calculate total
+        total_amount = sum([item.price for item in items])
+
+        # Generate blockchain deposit address
+        address, encrypted_key = WalletService.generate_deposit_wallet()
+
+        # Create order
+        order = Checkout.objects.create(
+            user=user,
+            total_amount=total_amount,
+            receive_address=address,
+            encrypted_private_key=encrypted_key,
+            status='pending',
+            payment_method='crypto'
+        )
+
+        for item in items:
+            order.courses.add(item.course)
+
+        # Empty cart
+        items.delete()
+
+        return Response({
+            "order_id": str(order.order_id),
+            "total_amount": total_amount,
+            "receive_address": address,
+            "network": "BSC",
+            "token": "USDT",
+            "contract": settings.USDT_CONTRACT
+        }) 
+# paypal logic for checkout
+@extend_schema(
+    tags=["Checkout"],
+    summary="Process PayPal checkout for the shopping cart"
+)
+class PayPalCheckoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        items = ShopingCart.objects.filter(user=user)
+
+        # Fetch cart items
+        items = ShopingCart.objects.filter(user=user)
+        if not items.exists():
+            return Response({"error": "Cart is empty"}, status=400)
+
+        # Calculate total
+        total_amount = sum([item.price for item in items])
+
+        # Create order
+        order = Checkout.objects.create(
+            user=user,
+            total_amount=total_amount,
+            status='pending',
+            payment_method='paypal'
+        )
+
+        for item in items:
+            order.courses.add(item.course)
+        payment = paypalrestsdk.Payment({
+            "intent": "sale",
+            "payer": {"payment_method": "paypal"},
+            "redirect_urls": {
+                "return_url": f"{settings.FRONTEND_URL}/paypal/success/?order_id={order.order_id}",
+                "cancel_url": f"{settings.FRONTEND_URL}/paypal/cancel/?order_id={order.order_id}",
+            },
+            "transactions": [{
+                "amount": {
+                    "total": str(total_amount),
+                    "currency": "USD"
+                },
+                "description": f"Order {order.order_id}"
+            }]
+        })
+        # Empty cart
+        items.delete()
+
+        
+        if not payment.create():
+            return Response(payment.error, status=400)
+
+        approval_url = next(
+            link.href for link in payment.links if link.rel == "approval_url"
+        )
+
+        items.delete()
+
+        return Response({
+            "approval_url": approval_url,
+            "order_id": str(order.order_id),
+            "payment_id": payment.id
+        })
+
+# paypal success view
+@extend_schema(
+    tags=["Checkout"],
+    summary="Handle PayPal payment success"
+)
+class PayPalPaymentSuccessView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        payment_id = request.data.get('payment_id')
+        payer_id = request.data.get('payer_id')
+        order_id = request.data.get('order_id')
+
+        payment = paypalrestsdk.Payment.find(payment_id)
+
+        if payment.execute({"payer_id": payer_id}):
+            try:
+                order = Checkout.objects.get(order_id=order_id, user=request.user)
+                order.status = 'paid'
+                order.save()
+
+                for course in order.courses.all():
+                    Enrollment.objects.create(
+                        user=request.user,
+                        course=course,
+                        price=course.price
+                    )
+
+                return Response({"message": "Payment successful and courses enrolled."})
+            except Checkout.DoesNotExist:
+                return Response({"error": "Order not found."}, status=404)
+        else:
+            return Response(payment.error, status=400)
+  

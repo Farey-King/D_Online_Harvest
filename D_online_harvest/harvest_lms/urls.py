@@ -2,7 +2,7 @@ from django.urls import include, path,re_path
 
 
 
-from  harvest_lms.views import (AdminDashboardView, AdminStatisticsDetailView, AdvancedInformationView,
+from  harvest_lms.views import (AdminActivityLogView, AdminDashboardView, AdminStatisticsDetailView, AdvancedInformationView,
                                 CompleteLessonView, 
                                 CompletedListView,
                                 ConfirmPasswordResetView, CourseCommissionView, CourseCurriculumDeleteView, CourseCurriculumUpdateView,
@@ -15,10 +15,10 @@ from  harvest_lms.views import (AdminDashboardView, AdminStatisticsDetailView, A
                                 InstructorDashboardCardsView,
                                 InstructorEarningsView, 
                                 MarkNotificationAsReadView, 
-                                NotificationListView, PurchaseHistoryView,
+                                NotificationListView, PayPalCheckoutView, PurchaseHistoryView,
                     RequestPasswordResetView, 
                     SigninView, SignoutView, 
-                    SignupView,ProfileUpdateView, TransactionHistoryView, Transactionview, UpcomingTasksView, 
+                    SignupView,ProfileUpdateView, SystemReportView, TransactionHistoryView, Transactionview, UpcomingTasksView, 
                     UserLookupView,
                     StudentDashboardView,
                     CourseListView,
@@ -43,9 +43,13 @@ from  harvest_lms.views import (AdminDashboardView, AdminStatisticsDetailView, A
                     EarningsDashboardView,
                     NotificationView,
                     RevenueChartView,
+                    CreateSystemReportView,
+                    CheckoutView,
+                    ShoppingCartView,
+                    PayPalPaymentSuccessView,
                     )
 try:
-    from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+    from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView # type: ignore
 except Exception:
     # drf-spectacular is not installed or import could not be resolved; provide simple fallback views
     from django.http import HttpResponse
@@ -89,6 +93,13 @@ urlpatterns = [
     #  Completed
     # path("api/student/completed/", CompletedListView.as_view(), name="completed-list"),
     path('student/completed/dashboard/', StudentCompletedDashboardView.as_view(), name='student-completed-dashboard'),
+    path("completed/", CompletedListView.as_view(), name="completed-list"),
+     # Shopping Cart and Checkout
+    path("shopping-cart/", ShoppingCartView.as_view(), name="shopping-cart"),
+    # path('shopping-cart/<int:item_id>/', ShoppingCartView.as_view(), name='shopping-cart-delete'),
+    path("checkout/", CheckoutView.as_view(), name="checkout"),
+    path("paypal-checkout/", PayPalCheckoutView.as_view(), name="paypal-checkout"),
+    path("paypal-success/", PayPalPaymentSuccessView.as_view(), name="paypal-success"),
     # Instructor Dashboard Cards
     path('instructor/dashboard-cards/', InstructorDashboardCardsView.as_view(), name='instructor-dashboard-cards'),
 
@@ -129,6 +140,9 @@ urlpatterns = [
     path('panel/admin/revenue-chart/', RevenueChartView.as_view(), name='admin-revenue-chart'), 
 
     path('panel/admin/transaction/', Transactionview.as_view(), name='transaction-view'),
+    path('panel/admin/activity-logs/', AdminActivityLogView.as_view(), name='admin-activity-logs'),
+    path('panel/admin/system-reports/', SystemReportView.as_view(), name='admin-system-reports'),
+    path('panel/admin/create-system-report/', CreateSystemReportView.as_view(), name='create-system-report'),
     
 ]
 

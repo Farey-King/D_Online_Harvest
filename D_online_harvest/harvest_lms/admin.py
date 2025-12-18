@@ -27,10 +27,16 @@ from .models import( AdvancedInformation,
                     PublishCourse,
                     Transaction,
                     Notification,
+                    ShopingCart,
+                    Checkout,
+                    VerificationCode
+                    
                     
 
 )
-
+admin.site.register(VerificationCode)
+admin.site.register(Checkout)
+admin.site.register(ShopingCart)
 admin.site.register(AdvancedInformation)
 admin.site.register(BasicInformation)
 admin.site.register(CourseCurriculum)
