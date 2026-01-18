@@ -175,7 +175,7 @@ pyunormalize==17.0.0
 ####################################
 
 # Required for some Windows system integrations
-pywin32==311
+# pywin32==311
 
 
 ####################################
