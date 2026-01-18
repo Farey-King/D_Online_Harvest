@@ -186,7 +186,7 @@ pyunormalize==17.0.0
 regex==2025.11.3
 
 # HTTP library for making web requests (used by many APIs)
-requests==2.32.5
+# requests==2.32.5
 
 # Recursive-length prefix encoding (used in Ethereum transactions)
 rlp==4.1.0
