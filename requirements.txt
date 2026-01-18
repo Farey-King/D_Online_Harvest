@@ -100,10 +100,6 @@ ckzg==2.1.5
 # Optimized functional utilities
 cytoolz==1.1.0
 
-
- ETHEREUM / WEB3 DEPENDENCIES
-
-
 # Ethereum account management (signing, key handling)
 eth-account==0.13.7
 
