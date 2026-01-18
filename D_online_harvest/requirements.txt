@@ -45,9 +45,9 @@ drf-spectacular==0.28.0
 drf-spectacular-sidecar==2025.3.1
 
 
-
-#  DEPLOYMENT & STATIC FILES
-
+####################################
+# 🚀 DEPLOYMENT & STATIC FILES
+####################################
 
 # WSGI HTTP server used for deploying Django apps
 gunicorn==21.2.0
@@ -56,9 +56,9 @@ gunicorn==21.2.0
 whitenoise==6.6.0
 
 
-
-#  OPTIONAL UTILITIES (UNCOMMENT IF NEEDED)
-
+####################################
+# 🧰 OPTIONAL UTILITIES (UNCOMMENT IF NEEDED)
+####################################
 # boto3==1.39.3                 # AWS SDK for Python
 # django-storages==1.14.2       # For integrating with cloud storage (S3, etc.)
 # django-phonenumber-field==7.3.0  # Validates and formats phone numbers
@@ -66,9 +66,9 @@ whitenoise==6.6.0
 # django-extensions==4.1        # Adds useful developer commands and tools
 
 
-
-#  ASYNC & NETWORK UTILITIES (Web3 & HTTP)
-
+####################################
+# ⚡ ASYNC & NETWORK UTILITIES (Web3 & HTTP)
+####################################
 
 # Improves DNS and connection handling performance for async HTTP
 aiohappyeyeballs==2.6.1
@@ -100,10 +100,6 @@ ckzg==2.1.5
 # Optimized functional utilities
 cytoolz==1.1.0
 
-
- ETHEREUM / WEB3 DEPENDENCIES
-
-
 # Ethereum account management (signing, key handling)
 eth-account==0.13.7
 
@@ -129,6 +125,9 @@ eth-utils==5.3.1
 eth_abi==5.2.0
 
 
+####################################
+# 🧱 DEPENDENCIES FOR WEB3 & ASYNC
+####################################
 
 # Support for immutable sequence types in async programming
 frozenlist==1.8.0
@@ -152,6 +151,9 @@ propcache==0.4.1
 pycryptodome==3.23.0
 
 
+####################################
+# 🧩 DATA MODELING & VALIDATION
+####################################
 
 # Data validation and serialization library
 pydantic==2.12.3
@@ -160,29 +162,31 @@ pydantic==2.12.3
 pydantic_core==2.41.4
 
 
-#  ENCODING & NORMALIZATION
-
+####################################
+# 🔠 ENCODING & NORMALIZATION
+####################################
 
 # Unicode normalization utilities
 pyunormalize==17.0.0
 
 
-
-#  WINDOWS SUPPORT
-
+####################################
+# 🪟 WINDOWS SUPPORT
+####################################
 
 # Required for some Windows system integrations
-pywin32==311
+# pywin32==311
 
 
-
-#  REGEX, REQUEST TYPES & TYPING UTILITIES
+####################################
+# 🔍 REGEX, REQUEST TYPES & TYPING
+####################################
 
 # Advanced regular expression engine
 regex==2025.11.3
 
 # HTTP library for making web requests (used by many APIs)
-requests==2.32.5
+# requests==2.32.5
 
 # Recursive-length prefix encoding (used in Ethereum transactions)
 rlp==4.1.0
@@ -200,22 +204,18 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 
 
+####################################
+# 🌍 NETWORKING & WEB SOCKETS
+####################################
 
 # HTTP library core dependency
 urllib3==2.5.0
 
 # Main Web3.py library for Ethereum blockchain interaction
-web3
+web3==7.14.0
 
 # WebSocket protocol client for async blockchain communication
 websockets==15.0.1
 
 # URL handling for aiohttp and async APIs
 yarl==1.22.0
-
-
-qrcode
-Pillow
-celery
-redis
-paypalrestsdk
